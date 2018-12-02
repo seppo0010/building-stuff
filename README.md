@@ -5,7 +5,7 @@ I'm using this project to learn [Amethyst](https://amethyst.rs) and
 
 # Roadmap
 
-* Floor and sky
+* ~Floor~ and sky
 * Show boxes of different colors on the floor
 * Mouse to look around
 * Cursor in the center and pointing to boxes prints the color
