@@ -3,19 +3,17 @@ extern crate amethyst;
 use amethyst::{
     assets::{Loader, ProgressCounter},
     controls::{FlyControlBundle, FlyControlTag},
-        input::InputBundle,
-
     core::{
-        cgmath::{Quaternion, Rad, Vector3, Point3},
+        cgmath::{Quaternion, Rad, Vector3},
         transform::TransformBundle,
         Transform,
     },
+    input::InputBundle,
     prelude::*,
     renderer::{
-        AmbientColor, Camera, DrawShaded, Material, MaterialDefaults, ObjFormat, PosNormTex,
-        Projection, Rgba, Shape, MeshHandle,
+        AmbientColor, Camera, DisplayConfig, DrawShaded, Material, MaterialDefaults, MeshHandle,
+        ObjFormat, Pipeline, PosNormTex, Projection, RenderBundle, Rgba, Shape, Stage,
     },
-
     utils::application_root_dir,
 };
 
@@ -35,13 +33,9 @@ impl ExampleState {
             let tex_storage = world.read_resource();
             let mut progress = ProgressCounter::default();
             let loader = world.read_resource::<Loader>();
-            let cube = loader.load(
-                "resources/cube.obj",
-                ObjFormat,
-                (),
-                &mut progress,
-                &mesh_storage,
-            );
+            let mesh_data = Shape::Cube.generate::<Vec<PosNormTex>>(None);
+            let cube: MeshHandle =
+                loader.load_from_data(mesh_data.into(), &mut progress, &mesh_storage);
             let red = Material {
                 albedo: loader.load_from_data(
                     [0.0, 1.0, 0.0, 1.0].into(),
@@ -65,17 +59,17 @@ impl ExampleState {
     fn create_floor(&mut self, world: &mut World) {
         let mut t = Transform::default();
         t.rotation = Quaternion::new(0.0, 1.0, 0.0, 0.0);
-        t.scale = Vector3::new(1000.0, 1000.0, 1000.0);
+        t.scale = Vector3::new(1000.0, 0.0, 1000.0);
         t.translation = Vector3::new(0.0, 0.0, 0.0);
-        t.look_at(Point3::new(0.0, 1.0, 0.0), Vector3::new(0.0, 0.0, 1.0));
 
         let (plane, color) = {
             let mesh_storage = world.read_resource();
             let tex_storage = world.read_resource();
             let mut progress = ProgressCounter::default();
             let loader = world.read_resource::<Loader>();
-            let mesh_data = Shape::Plane(None).generate::<Vec<PosNormTex>>(None);
-            let plane: MeshHandle = loader.load_from_data(mesh_data.into(), &mut progress, &mesh_storage);
+            let mesh_data = Shape::Cube.generate::<Vec<PosNormTex>>(None);
+            let plane: MeshHandle =
+                loader.load_from_data(mesh_data.into(), &mut progress, &mesh_storage);
             let color = Material {
                 albedo: loader.load_from_data(
                     [135.0 / 255.0, 67.0 / 255.0, 23.0 / 255.0, 1.0].into(),
@@ -101,15 +95,15 @@ impl ExampleState {
         t.translation = Vector3::new(0.0, 0.0, 5.0);
         t.rotation = Quaternion::new(1.0, 0.0, 0.0, 0.0);
         t.scale = Vector3::new(5.0, 5.0, 0.0);
-        t.look_at(Point3::new(0.0, 0.0, -1.0), Vector3::new(0.0, 1.0, 0.0));
 
         let (plane, color) = {
             let mesh_storage = world.read_resource();
             let tex_storage = world.read_resource();
             let mut progress = ProgressCounter::default();
             let loader = world.read_resource::<Loader>();
-            let mesh_data = Shape::Plane(None).generate::<Vec<PosNormTex>>(None);
-            let plane: MeshHandle = loader.load_from_data(mesh_data.into(), &mut progress, &mesh_storage);
+            let mesh_data = Shape::Cube.generate::<Vec<PosNormTex>>(None);
+            let plane: MeshHandle =
+                loader.load_from_data(mesh_data.into(), &mut progress, &mesh_storage);
             let color = Material {
                 albedo: loader.load_from_data(
                     [1.0, 0.0, 1.0, 1.0].into(),
@@ -157,21 +151,33 @@ impl<'a, 'b> SimpleState<'a, 'b> for ExampleState {
 
 fn main() -> amethyst::Result<()> {
     amethyst::start_logger(Default::default());
-let app_root = application_root_dir();
+
+    let app_root = application_root_dir();
+
     let display_config_path = format!("{}/resources/display_config.ron", app_root);
 
     let key_bindings_path = format!("{}/resources/input.ron", app_root);
 
+    let pipe = Pipeline::build().with_stage(
+        Stage::with_backbuffer()
+            .clear_target([30.0 / 255.0, 144.0 / 255.0, 255.0 / 255.0, 1.0], 1.0)
+            .with_pass(DrawShaded::<PosNormTex>::new()),
+    );
+
     let game_data = GameDataBuilder::default()
-        .with_bundle(FlyControlBundle::<String, String>::new(
-        Some(String::from("move_x")),
+        .with_bundle(
+            FlyControlBundle::<String, String>::new(
+                Some(String::from("move_x")),
                 Some(String::from("move_y")),
-                Some(String::from("move_z"))).with_sensitivity(0.1, 0.1))?
-                .with_bundle(
+                Some(String::from("move_z")),
+            ).with_sensitivity(0.1, 0.1),
+        )?.with_bundle(
             InputBundle::<String, String>::new().with_bindings_from_file(&key_bindings_path)?,
-        )?
-        .with_bundle(TransformBundle::new().with_dep(&["fly_movement"]))?
-        .with_basic_renderer(display_config_path, DrawShaded::<PosNormTex>::new(), false)?;
+        )?.with_bundle(TransformBundle::new().with_dep(&["fly_movement"]))?
+        .with_bundle(
+            RenderBundle::new(pipe, Some(DisplayConfig::load(&display_config_path)))
+                .with_sprite_sheet_processor(),
+        )?;
     let mut game = Application::new("./", ExampleState, game_data)?;
 
     game.run();
