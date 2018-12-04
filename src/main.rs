@@ -12,47 +12,57 @@ use amethyst::{
     prelude::*,
     renderer::{
         AmbientColor, Camera, DisplayConfig, DrawShaded, Material, MaterialDefaults, MeshHandle,
-        ObjFormat, Pipeline, PosNormTex, Projection, RenderBundle, Rgba, Shape, Stage,
+        Pipeline, PosNormTex, Projection, RenderBundle, Rgba, Shape, Stage,
     },
     utils::application_root_dir,
 };
 
-struct ExampleState;
+#[derive(Default)]
+struct ExampleState {
+    cube_mesh: Option<MeshHandle>,
+    cube_materials: Vec<Material>,
+}
 
 impl ExampleState {
     fn create_light(&mut self, world: &mut World) {
         world.add_resource(AmbientColor(Rgba(0.3, 0.3, 0.3, 1.0)));
     }
 
-    fn create_cube(&mut self, world: &mut World) {
+    fn prepare_cubes(&mut self, world: &mut World) {
+        let mesh_storage = world.read_resource();
+        let tex_storage = world.read_resource();
+        let mut progress = ProgressCounter::default();
+        let loader = world.read_resource::<Loader>();
+        let mesh_data = Shape::Cube.generate::<Vec<PosNormTex>>(None);
+        self.cube_mesh = Some(loader.load_from_data(mesh_data.into(), &mut progress, &mesh_storage));
+        for color in [
+            [0.0, 1.0, 0.0, 1.0],
+            [1.0, 1.0, 0.0, 1.0],
+            [1.0, 0.0, 0.0, 1.0],
+            [1.0, 0.0, 1.0, 1.0],
+            [0.0, 0.0, 1.0, 1.0],
+        ].into_iter() {
+        self.cube_materials.push(Material {
+            albedo: loader.load_from_data(
+                (*color).into(),
+                &mut progress,
+                &tex_storage,
+            ),
+            ..world.read_resource::<MaterialDefaults>().0.clone()
+        });
+            }
+    }
+
+    fn create_cube(&mut self, world: &mut World, i: usize) {
         let mut t = Transform::default();
-        t.translation = Vector3::new(0.0, 3.0, 5.0);
-
-        let (cube, red) = {
-            let mesh_storage = world.read_resource();
-            let tex_storage = world.read_resource();
-            let mut progress = ProgressCounter::default();
-            let loader = world.read_resource::<Loader>();
-            let mesh_data = Shape::Cube.generate::<Vec<PosNormTex>>(None);
-            let cube: MeshHandle =
-                loader.load_from_data(mesh_data.into(), &mut progress, &mesh_storage);
-            let red = Material {
-                albedo: loader.load_from_data(
-                    [0.0, 1.0, 0.0, 1.0].into(),
-                    &mut progress,
-                    &tex_storage,
-                ),
-                ..world.read_resource::<MaterialDefaults>().0.clone()
-            };
-            (cube, red)
-        };
-
+        t.scale = Vector3::new(0.5, 0.5, 0.5);
+        t.translation = Vector3::new((i as f32) * 3.0 - 7.5, 0.5, 3.0 + (-1.0 as f32).powf(i as f32) * 0.5);
         world
             .create_entity()
-            .named("box")
+            .named(format!("box{}", i))
             .with(t)
-            .with(cube)
-            .with(red)
+            .with(self.cube_mesh.clone().unwrap())
+            .with(self.cube_materials[i].clone())
             .build();
     }
 
@@ -90,40 +100,6 @@ impl ExampleState {
             .build();
     }
 
-    fn create_wall(&mut self, world: &mut World) {
-        let mut t = Transform::default();
-        t.translation = Vector3::new(0.0, 0.0, 5.0);
-        t.rotation = Quaternion::new(1.0, 0.0, 0.0, 0.0);
-        t.scale = Vector3::new(5.0, 5.0, 0.0);
-
-        let (plane, color) = {
-            let mesh_storage = world.read_resource();
-            let tex_storage = world.read_resource();
-            let mut progress = ProgressCounter::default();
-            let loader = world.read_resource::<Loader>();
-            let mesh_data = Shape::Cube.generate::<Vec<PosNormTex>>(None);
-            let plane: MeshHandle =
-                loader.load_from_data(mesh_data.into(), &mut progress, &mesh_storage);
-            let color = Material {
-                albedo: loader.load_from_data(
-                    [1.0, 0.0, 1.0, 1.0].into(),
-                    &mut progress,
-                    &tex_storage,
-                ),
-                ..world.read_resource::<MaterialDefaults>().0.clone()
-            };
-            (plane, color)
-        };
-
-        world
-            .create_entity()
-            .named("wall")
-            .with(plane)
-            .with(color)
-            .with(t)
-            .build();
-    }
-
     fn create_camera(&mut self, world: &mut World) {
         let mut t = Transform::default();
         t.translation = Vector3::new(0.0, 1.8, 0.0);
@@ -143,8 +119,10 @@ impl<'a, 'b> SimpleState<'a, 'b> for ExampleState {
     fn on_start(&mut self, data: StateData<GameData>) {
         self.create_light(data.world);
         self.create_floor(data.world);
-        self.create_wall(data.world);
-        self.create_cube(data.world);
+        self.prepare_cubes(data.world);
+        for i in 0..5 {
+            self.create_cube(data.world, i);
+        }
         self.create_camera(data.world);
     }
 }
@@ -178,7 +156,7 @@ fn main() -> amethyst::Result<()> {
             RenderBundle::new(pipe, Some(DisplayConfig::load(&display_config_path)))
                 .with_sprite_sheet_processor(),
         )?;
-    let mut game = Application::new("./", ExampleState, game_data)?;
+    let mut game = Application::new("./", ExampleState::default(), game_data)?;
 
     game.run();
 
