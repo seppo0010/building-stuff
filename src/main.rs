@@ -11,8 +11,8 @@ use amethyst::{
     input::InputBundle,
     prelude::*,
     renderer::{
-        AmbientColor, Camera, DisplayConfig, DrawShaded, Material, MaterialDefaults, MeshHandle,
-        Pipeline, PosNormTex, Projection, RenderBundle, Rgba, Shape, Stage,
+        Camera, DirectionalLight, DisplayConfig, DrawShaded, Light, Material, MaterialDefaults,
+        MeshHandle, Pipeline, PosNormTex, Projection, RenderBundle, Rgba, Shape, Stage,
     },
     utils::application_root_dir,
 };
@@ -25,7 +25,39 @@ struct ExampleState {
 
 impl ExampleState {
     fn create_light(&mut self, world: &mut World) {
-        world.add_resource(AmbientColor(Rgba(0.3, 0.3, 0.3, 1.0)));
+        for (dir, pos, color) in [
+            ([-1.0, 0.0, 0.0], [100.0, 0.0, 0.0], 0.08_f32),
+            ([1.0, 0.0, 0.0], [-100.0, 0.0, 0.0], 0.09_f32),
+            ([0.0, 0.0, -1.0], [0.0, 0.0, 100.0], 0.10_f32),
+            ([0.0, 0.0, 1.0], [0.0, 0.0, -100.0], 0.11_f32),
+            ([0.0, -1.0, 0.0], [0.0, 100.0, 0.0], 0.12_f32),
+        ]
+            .into_iter()
+        {
+            let mut s = DirectionalLight::default();
+            s.direction = *dir;
+            s.color = Rgba(*color, *color, *color, 1.0);
+            let mut t = Transform::default();
+            t.translation = Vector3::new(pos[0], pos[1], pos[2]);
+
+            world
+                .create_entity()
+                .with(t)
+                .with(Light::Directional(s))
+                .build();
+        }
+
+        let mut s = DirectionalLight::default();
+        s.direction = [0.3, -1.0, 0.3];
+        s.color = Rgba(0.6, 0.6, 0.6, 1.0);
+        let mut t = Transform::default();
+        t.translation = Vector3::new(0.0, 100.0, 10.0);
+
+        world
+            .create_entity()
+            .with(t)
+            .with(Light::Directional(s))
+            .build();
     }
 
     fn prepare_cubes(&mut self, world: &mut World) {
@@ -34,29 +66,32 @@ impl ExampleState {
         let mut progress = ProgressCounter::default();
         let loader = world.read_resource::<Loader>();
         let mesh_data = Shape::Cube.generate::<Vec<PosNormTex>>(None);
-        self.cube_mesh = Some(loader.load_from_data(mesh_data.into(), &mut progress, &mesh_storage));
+        self.cube_mesh =
+            Some(loader.load_from_data(mesh_data.into(), &mut progress, &mesh_storage));
         for color in [
             [0.0, 1.0, 0.0, 1.0],
             [1.0, 1.0, 0.0, 1.0],
             [1.0, 0.0, 0.0, 1.0],
             [1.0, 0.0, 1.0, 1.0],
             [0.0, 0.0, 1.0, 1.0],
-        ].into_iter() {
-        self.cube_materials.push(Material {
-            albedo: loader.load_from_data(
-                (*color).into(),
-                &mut progress,
-                &tex_storage,
-            ),
-            ..world.read_resource::<MaterialDefaults>().0.clone()
-        });
-            }
+        ]
+            .into_iter()
+        {
+            self.cube_materials.push(Material {
+                albedo: loader.load_from_data((*color).into(), &mut progress, &tex_storage),
+                ..world.read_resource::<MaterialDefaults>().0.clone()
+            });
+        }
     }
 
     fn create_cube(&mut self, world: &mut World, i: usize) {
         let mut t = Transform::default();
         t.scale = Vector3::new(0.5, 0.5, 0.5);
-        t.translation = Vector3::new((i as f32) * 3.0 - 7.5, 0.5, 3.0 + (-1.0 as f32).powf(i as f32) * 0.5);
+        t.translation = Vector3::new(
+            (i as f32) * 3.0 - 7.5,
+            0.5,
+            3.0 + (-1.0_f32).powf(i as f32) * 0.5,
+        );
         world
             .create_entity()
             .named(format!("box{}", i))
