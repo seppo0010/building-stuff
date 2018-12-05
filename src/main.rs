@@ -11,8 +11,9 @@ use amethyst::{
     input::InputBundle,
     prelude::*,
     renderer::{
-        Camera, DirectionalLight, DisplayConfig, DrawShaded, Light, Material, MaterialDefaults,
-        MeshHandle, Pipeline, PosNormTex, Projection, RenderBundle, Rgba, Shape, Stage,
+        AmbientColor, Camera, DirectionalLight, DisplayConfig, DrawShaded, Light, Material,
+        MaterialDefaults, MeshHandle, Pipeline, PosNormTex, Projection, RenderBundle, Rgba, Shape,
+        Stage,
     },
     utils::application_root_dir,
 };
@@ -25,12 +26,14 @@ struct ExampleState {
 
 impl ExampleState {
     fn create_light(&mut self, world: &mut World) {
+        world.add_resource(AmbientColor(Rgba(0.3, 0.3, 0.3, 1.0)));
         for (dir, pos, color) in [
             ([-1.0, 0.0, 0.0], [100.0, 0.0, 0.0], 0.08_f32),
             ([1.0, 0.0, 0.0], [-100.0, 0.0, 0.0], 0.09_f32),
             ([0.0, 0.0, -1.0], [0.0, 0.0, 100.0], 0.10_f32),
             ([0.0, 0.0, 1.0], [0.0, 0.0, -100.0], 0.11_f32),
             ([0.0, -1.0, 0.0], [0.0, 100.0, 0.0], 0.12_f32),
+            ([0.3, -1.0, 0.3], [0.0, 100.0, 10.0], 0.6f32),
         ]
             .into_iter()
         {
@@ -46,18 +49,6 @@ impl ExampleState {
                 .with(Light::Directional(s))
                 .build();
         }
-
-        let mut s = DirectionalLight::default();
-        s.direction = [0.3, -1.0, 0.3];
-        s.color = Rgba(0.6, 0.6, 0.6, 1.0);
-        let mut t = Transform::default();
-        t.translation = Vector3::new(0.0, 100.0, 10.0);
-
-        world
-            .create_entity()
-            .with(t)
-            .with(Light::Directional(s))
-            .build();
     }
 
     fn prepare_cubes(&mut self, world: &mut World) {
