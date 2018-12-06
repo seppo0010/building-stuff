@@ -1,4 +1,7 @@
 extern crate amethyst;
+extern crate nalgebra as na;
+extern crate ncollide3d;
+extern crate nphysics3d;
 
 use amethyst::{
     assets::{Loader, ProgressCounter},
@@ -8,7 +11,7 @@ use amethyst::{
         transform::TransformBundle,
         Transform,
     },
-    ecs::{Component, Join, ReadStorage, System, VecStorage},
+    ecs::{Component, Join, Read, ReadStorage, System, VecStorage, Write},
     input::InputBundle,
     prelude::*,
     renderer::{
@@ -20,8 +23,25 @@ use amethyst::{
     utils::application_root_dir,
 };
 
-pub struct Pointable;
-impl Component for Pointable {
+use nphysics3d::{
+    math::Vector,
+    object::{BodyHandle, Material as PhysicsMaterial, Multibody, RigidBody},
+    volumetric::Volumetric,
+    world::World as PhysicsWorld,
+};
+
+use na::{Isometry3, Point3, Vector3 as PhysicsVector3};
+
+use ncollide3d::{
+    query::Ray,
+    shape::{Cuboid, ShapeHandle},
+    world::CollisionGroups,
+};
+
+pub struct PhysicsBody(BodyHandle);
+type MyWorld = PhysicsWorld<f32>;
+
+impl Component for PhysicsBody {
     type Storage = VecStorage<Self>;
 }
 
@@ -82,7 +102,7 @@ impl ExampleState {
         }
     }
 
-    fn create_cube(&mut self, world: &mut World, i: usize) {
+    fn create_cube(&mut self, world: &mut World, i: usize, physics_world: &mut MyWorld) {
         let mut t = Transform::default();
         t.scale = Vector3::new(0.5, 0.5, 0.5);
         t.translation = Vector3::new(
@@ -90,13 +110,34 @@ impl ExampleState {
             0.5,
             3.0 + (-1.0_f32).powf(i as f32) * 0.5,
         );
+        const COLLIDER_MARGIN: f32 = 0.01;
+
+        let geom = ShapeHandle::new(Cuboid::new(PhysicsVector3::repeat(1000.5 - COLLIDER_MARGIN)));
+        let inertia = geom.inertia(1.0);
+        let center_of_mass = geom.center_of_mass();
+
+        let pos = Isometry3::new(
+            PhysicsVector3::new(t.translation[0], t.translation[1], t.translation[2]),
+            na::zero(),
+        );
+
+            let body_handle = physics_world.add_rigid_body(pos, inertia, center_of_mass);
+
+            let _collider_handle = physics_world.add_collider(
+                COLLIDER_MARGIN,
+                geom.clone(),
+                body_handle,
+                Isometry3::identity(),
+                PhysicsMaterial::default(),
+            );
+
         world
             .create_entity()
             .named(format!("box{}", i))
             .with(t)
             .with(self.cube_mesh.clone().unwrap())
             .with(self.cube_materials[i].clone())
-            .with(Pointable)
+            .with(PhysicsBody(body_handle))
             .build();
     }
 
@@ -158,14 +199,19 @@ impl ExampleState {
 
 impl<'a, 'b> SimpleState<'a, 'b> for ExampleState {
     fn on_start(&mut self, data: StateData<GameData>) {
+        data.world.register::<PhysicsBody>();
+        let mut physics_world = MyWorld::default();
+        physics_world.set_gravity(Vector::new(0., 0., 0.));
         self.create_light(data.world);
         self.create_floor(data.world);
         self.prepare_cubes(data.world);
         for i in 0..5 {
-            self.create_cube(data.world, i);
+            self.create_cube(data.world, i, &mut physics_world);
         }
         self.create_camera(data.world);
-        self.create_center(data.world)
+        self.create_center(data.world);
+        data.world.add_resource(physics_world);
+
     }
 }
 
@@ -175,9 +221,9 @@ impl<'s> System<'s> for PointingSystem {
     type SystemData = (
         ReadStorage<'s, Camera>,
         ReadStorage<'s, Transform>,
-        ReadStorage<'s, Pointable>,
+        Read<'s, MyWorld>,
     );
-    fn run(&mut self, (cameras, transforms, _pointables): Self::SystemData) {
+    fn run(&mut self, (cameras, transforms, physics_world): Self::SystemData) {
         let mut rotation = None;
         let mut translation = None;
         for (_, transform) in (&cameras, &transforms).join() {
@@ -188,7 +234,30 @@ impl<'s> System<'s> for PointingSystem {
             (Some(r), Some(t)) => (r, t),
             (_, _) => return,
         };
-        println!("{:?} {:?}", rotation, translation);
+        let r = rotation * Vector3::new(0.0, 0.0, -1.0);
+        let ray = Ray::new(
+            Point3::new(translation.x, translation.y, translation.z),
+            PhysicsVector3::new(r.x, r.y, r.z),
+        );
+        let all_groups = &CollisionGroups::new();
+        // println!("{:?}", rotation);
+        println!("{:?}", ray);
+        println!(
+            "{:?}",
+            physics_world
+                .collision_world()
+                .collision_objects()
+                .into_iter()
+                .map(|co| format!("{:?}", co.position()))
+                .collect::<Vec<_>>()
+        );
+        println!(
+            "{}",
+            physics_world
+                .collision_world()
+                .interferences_with_ray(&ray, all_groups)
+                .count()
+        );
     }
 }
 
