@@ -8,6 +8,7 @@ use amethyst::{
         transform::TransformBundle,
         Transform,
     },
+    ecs::{Component, Join, ReadStorage, System, VecStorage},
     input::InputBundle,
     prelude::*,
     renderer::{
@@ -18,6 +19,11 @@ use amethyst::{
     ui::{DrawUi, UiBundle, UiCreator},
     utils::application_root_dir,
 };
+
+pub struct Pointable;
+impl Component for Pointable {
+    type Storage = VecStorage<Self>;
+}
 
 #[derive(Default)]
 struct ExampleState {
@@ -90,6 +96,7 @@ impl ExampleState {
             .with(t)
             .with(self.cube_mesh.clone().unwrap())
             .with(self.cube_materials[i].clone())
+            .with(Pointable)
             .build();
     }
 
@@ -162,6 +169,29 @@ impl<'a, 'b> SimpleState<'a, 'b> for ExampleState {
     }
 }
 
+pub struct PointingSystem;
+
+impl<'s> System<'s> for PointingSystem {
+    type SystemData = (
+        ReadStorage<'s, Camera>,
+        ReadStorage<'s, Transform>,
+        ReadStorage<'s, Pointable>,
+    );
+    fn run(&mut self, (cameras, transforms, _pointables): Self::SystemData) {
+        let mut rotation = None;
+        let mut translation = None;
+        for (_, transform) in (&cameras, &transforms).join() {
+            rotation = Some(transform.rotation);
+            translation = Some(transform.translation);
+        }
+        let (rotation, translation) = match (rotation, translation) {
+            (Some(r), Some(t)) => (r, t),
+            (_, _) => return,
+        };
+        println!("{:?} {:?}", rotation, translation);
+    }
+}
+
 fn main() -> amethyst::Result<()> {
     amethyst::start_logger(Default::default());
 
@@ -192,7 +222,7 @@ fn main() -> amethyst::Result<()> {
         .with_bundle(
             RenderBundle::new(pipe, Some(DisplayConfig::load(&display_config_path)))
                 .with_sprite_sheet_processor(),
-        )?;
+        )?.with(PointingSystem, "pointing_system", &["fly_movement"]);;
     let mut game = Application::new("./", ExampleState::default(), game_data)?;
 
     game.run();
