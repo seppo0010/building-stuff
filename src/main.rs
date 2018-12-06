@@ -15,6 +15,7 @@ use amethyst::{
         MaterialDefaults, MeshHandle, Pipeline, PosNormTex, Projection, RenderBundle, Rgba, Shape,
         Stage,
     },
+    ui::{DrawUi, UiBundle, UiCreator},
     utils::application_root_dir,
 };
 
@@ -139,6 +140,13 @@ impl ExampleState {
             .with(t)
             .build();
     }
+
+    fn create_center(&mut self, world: &mut World) {
+        world.exec(|mut creator: UiCreator| {
+            let app_root = application_root_dir();
+            creator.create(format!("{}/resources/hud.ron", app_root), ());
+        });
+    }
 }
 
 impl<'a, 'b> SimpleState<'a, 'b> for ExampleState {
@@ -150,6 +158,7 @@ impl<'a, 'b> SimpleState<'a, 'b> for ExampleState {
             self.create_cube(data.world, i);
         }
         self.create_camera(data.world);
+        self.create_center(data.world)
     }
 }
 
@@ -165,7 +174,8 @@ fn main() -> amethyst::Result<()> {
     let pipe = Pipeline::build().with_stage(
         Stage::with_backbuffer()
             .clear_target([30.0 / 255.0, 144.0 / 255.0, 255.0 / 255.0, 1.0], 1.0)
-            .with_pass(DrawShaded::<PosNormTex>::new()),
+            .with_pass(DrawShaded::<PosNormTex>::new())
+            .with_pass(DrawUi::new()),
     );
 
     let game_data = GameDataBuilder::default()
@@ -178,6 +188,7 @@ fn main() -> amethyst::Result<()> {
         )?.with_bundle(
             InputBundle::<String, String>::new().with_bindings_from_file(&key_bindings_path)?,
         )?.with_bundle(TransformBundle::new().with_dep(&["fly_movement"]))?
+        .with_bundle(UiBundle::<String, String>::new())?
         .with_bundle(
             RenderBundle::new(pipe, Some(DisplayConfig::load(&display_config_path)))
                 .with_sprite_sheet_processor(),

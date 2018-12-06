@@ -1,0 +1,67 @@
+#![enable(implicit_some)]
+Container(
+    transform: (
+        id: "main_container",
+        anchor: Middle,
+    ),
+    children: [
+                Image(
+                    transform: (
+                        id: "center",
+                        width: 3.,
+                        height: 3.,
+                        anchor: Middle,
+                    ),
+                    image: (
+                        image: Data(Rgba((1.0, 1.0, 1.0, 1.0), (channel: Srgb))),
+                    )
+                ),
+    ],
+/*
+    children: [
+        Container(
+            transform: (
+                id: "top_right",
+                x: -32.,
+                y: -32.,
+                width: 64.,
+                height: 64.,
+                anchor: TopRight,
+            ),
+            background: (
+                image: Data(Rgba((0.09, 0.02, 0.25, 1.0), (channel: Srgb))),
+            ),
+            children: [
+                Image(
+                    transform: (
+                        id: "middle_top_right",
+                        width: 32.,
+                        height: 32.,
+                        anchor: Middle,
+                        stretch: XY( x_margin: 0., y_margin: 10.),
+                    ),
+                    image: (
+                        image: Data(Rgba((0.18, 0.05, 0.85, 1.0), (channel: Srgb))),
+                    )
+                ),
+            ]
+        ),
+        Text(
+            transform: (
+                id: "system_font",
+                x: 200.,
+                width: 400.,
+                height: 200.,
+                tab_order: 1,
+                anchor: MiddleLeft,
+            ),
+            text: (
+                text: "System Font",
+                font_size: 30.,
+                color: (0.2, 0.2, 1.0, 1.0),
+                align: MiddleLeft,
+            )
+        ),
+    ],
+        */
+)
