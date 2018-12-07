@@ -3,15 +3,17 @@ extern crate nalgebra as na;
 extern crate ncollide3d;
 extern crate nphysics3d;
 
+use std::time::Duration;
 use amethyst::{
     assets::{Loader, ProgressCounter},
     controls::{FlyControlBundle, FlyControlTag},
     core::{
         cgmath::{Quaternion, Rad, Vector3},
         transform::TransformBundle,
+        Time,
         Transform,
     },
-    ecs::{Component, Join, Read, ReadStorage, System, VecStorage, Write},
+    ecs::{Component, Entities, Join, Read, ReadExpect, ReadStorage, System, VecStorage, Write, WriteExpect, WriteStorage},
     input::InputBundle,
     prelude::*,
     renderer::{
@@ -196,6 +198,8 @@ impl ExampleState {
         });
     }
 }
+pub struct RayMesh(MeshHandle);
+pub struct RayMaterial(Material);
 
 impl<'a, 'b> SimpleState<'a, 'b> for ExampleState {
     fn on_start(&mut self, data: StateData<GameData>) {
@@ -212,18 +216,48 @@ impl<'a, 'b> SimpleState<'a, 'b> for ExampleState {
         self.create_center(data.world);
         data.world.add_resource(physics_world);
 
-    }
+        let (color, cylinder) = {
+            let mesh_storage = data.world.read_resource();
+            let tex_storage = data.world.read_resource();
+            let mut progress = ProgressCounter::default();
+            let loader = data.world.read_resource::<Loader>();
+            let mesh_data = Shape::Cylinder(100, None).generate::<Vec<PosNormTex>>(None);
+            let cylinder =
+                RayMesh(loader.load_from_data(mesh_data.into(), &mut progress, &mesh_storage));
+            let color = RayMaterial (Material{
+                albedo: loader.load_from_data(
+                    [135.0 / 255.0, 67.0 / 255.0, 23.0 / 255.0, 1.0].into(),
+                    &mut progress,
+                    &tex_storage,
+                ),
+                ..data.world.read_resource::<MaterialDefaults>().0.clone()
+            });
+            (color, cylinder)
+    };
+        data.world.add_resource(color);
+        data.world.add_resource(cylinder);
+            }
 }
 
-pub struct PointingSystem;
+#[derive(Default)]
+pub struct PointingSystem {
+    last_time: Option<Duration>,
+}
 
 impl<'s> System<'s> for PointingSystem {
     type SystemData = (
         ReadStorage<'s, Camera>,
-        ReadStorage<'s, Transform>,
         Read<'s, MyWorld>,
+        Read<'s, Time>,
+        Entities<'s>,
+        WriteStorage<'s, Transform>,
+        ReadExpect<'s, RayMesh>,
+        ReadExpect<'s, RayMaterial>,
+        WriteStorage<'s, MeshHandle>,
+        WriteStorage<'s, Material>,
+        WriteExpect<'s, Loader>,
     );
-    fn run(&mut self, (cameras, transforms, physics_world): Self::SystemData) {
+    fn run(&mut self, (cameras, physics_world, time, entities, mut transforms, ray_mesh, ray_material, mut meshs, mut materials, loader): Self::SystemData) {
         let mut rotation = None;
         let mut translation = None;
         for (_, transform) in (&cameras, &transforms).join() {
@@ -235,12 +269,28 @@ impl<'s> System<'s> for PointingSystem {
             (_, _) => return,
         };
         let r = rotation * Vector3::new(0.0, 0.0, -1.0);
+        let current_time = time.absolute_time();
+        if current_time - self.last_time.unwrap_or(Duration::new(0, 0)) >= Duration::new(2, 0) {
+            println!("{:?}", current_time);
+             self.last_time = Some(current_time);
+             let mut t = Transform::default();
+             t.translation = translation.clone();
+             t.rotation = Quaternion::new(0.0, r.x, r.y, r.z);
+             t.scale = Vector3::new(0.1, 0.1, 5.0);
+             entities.build_entity()
+                 .with(t, &mut transforms)
+                 .with(ray_mesh.0.clone(), &mut meshs)
+                 .with(ray_material.0.clone(), &mut materials)
+                 .build();
+
+        }
         let ray = Ray::new(
             Point3::new(translation.x, translation.y, translation.z),
             PhysicsVector3::new(r.x, r.y, r.z),
         );
         let all_groups = &CollisionGroups::new();
         // println!("{:?}", rotation);
+        /*
         println!("{:?}", ray);
         println!(
             "{:?}",
@@ -258,6 +308,7 @@ impl<'s> System<'s> for PointingSystem {
                 .interferences_with_ray(&ray, all_groups)
                 .count()
         );
+        */
     }
 }
 
@@ -291,7 +342,7 @@ fn main() -> amethyst::Result<()> {
         .with_bundle(
             RenderBundle::new(pipe, Some(DisplayConfig::load(&display_config_path)))
                 .with_sprite_sheet_processor(),
-        )?.with(PointingSystem, "pointing_system", &["fly_movement"]);;
+        )?.with(PointingSystem::default(), "pointing_system", &["fly_movement"]);;
     let mut game = Application::new("./", ExampleState::default(), game_data)?;
 
     game.run();
