@@ -14,18 +14,20 @@ use amethyst::{
         transform::TransformBundle,
         Transform,
     },
-    ecs::{Component, Entities, Join, Read, ReadExpect, ReadStorage, System, VecStorage, Write, WriteExpect, WriteStorage},
+    ecs::{
+        Component, Entities, Join, Read, ReadExpect, ReadStorage, System, VecStorage, Write,
+        WriteExpect, WriteStorage,
+    },
     input::InputBundle,
+    input::InputHandler,
     prelude::*,
     renderer::{
         AmbientColor, Camera, DirectionalLight, DisplayConfig, DrawShaded, Light, Material,
         MaterialDefaults, MeshHandle, Pipeline, PosNormTex, Projection, RenderBundle, Rgba, Shape,
-        Stage,VirtualKeyCode,
+        Stage, VirtualKeyCode,
     },
     ui::{DrawUi, UiBundle, UiCreator},
     utils::application_root_dir,
-        input::InputHandler,
-
 };
 
 use nphysics3d::{
@@ -67,7 +69,7 @@ impl ExampleState {
             ([0.0, -1.0, 0.0], [0.0, 100.0, 0.0], 0.12_f32),
             ([0.3, -1.0, 0.3], [0.0, 100.0, 10.0], 0.6f32),
         ]
-            .into_iter()
+        .into_iter()
         {
             let mut s = DirectionalLight::default();
             s.direction = *dir;
@@ -98,7 +100,7 @@ impl ExampleState {
             [1.0, 0.0, 1.0, 1.0],
             [0.0, 0.0, 1.0, 1.0],
         ]
-            .into_iter()
+        .into_iter()
         {
             self.cube_materials.push(Material {
                 albedo: loader.load_from_data((*color).into(), &mut progress, &tex_storage),
@@ -118,26 +120,29 @@ impl ExampleState {
         );
         const COLLIDER_MARGIN: f32 = 0.01;
 
-        let geom = ShapeHandle::new(Cuboid::new(PhysicsVector3::repeat(1000.5 - COLLIDER_MARGIN)));
+        let geom = ShapeHandle::new(Cuboid::new(PhysicsVector3::repeat(
+            1000.5 - COLLIDER_MARGIN,
+        )));
         let inertia = geom.inertia(1.0);
         let center_of_mass = geom.center_of_mass();
 
         let pos = {
             let translation = t.translation();
-         Isometry3::new(
-            PhysicsVector3::new(translation[0], translation[1], translation[2]),
-            na::zero(),
-        )};
+            Isometry3::new(
+                PhysicsVector3::new(translation[0], translation[1], translation[2]),
+                na::zero(),
+            )
+        };
 
-            let body_handle = physics_world.add_rigid_body(pos, inertia, center_of_mass);
+        let body_handle = physics_world.add_rigid_body(pos, inertia, center_of_mass);
 
-            let _collider_handle = physics_world.add_collider(
-                COLLIDER_MARGIN,
-                geom.clone(),
-                body_handle,
-                Isometry3::identity(),
-                PhysicsMaterial::default(),
-            );
+        let _collider_handle = physics_world.add_collider(
+            COLLIDER_MARGIN,
+            geom.clone(),
+            body_handle,
+            Isometry3::identity(),
+            PhysicsMaterial::default(),
+        );
 
         world
             .create_entity()
@@ -186,7 +191,11 @@ impl ExampleState {
     fn create_camera(&mut self, world: &mut World) {
         let mut t = Transform::default();
         *t.translation_mut() = Vector3::new(0.0, 1.8, 0.0);
-        *t.rotation_mut() = UnitQuaternion::from_quaternion(Quaternion::new(0.0, 0.0, 1.0, 0.0));
+        // *t.rotation_mut() = UnitQuaternion::from_quaternion(Quaternion::new(0.0, 0.0, 1.0, 0.0));
+        *t.rotation_mut() = UnitQuaternion::new_observer_frame(
+            &Vector3::new(0.0, 0.0, -1.0),
+            &Vector3::new(0.0, 1.0, 0.0),
+        );
         let c = Camera::from(Projection::perspective(1.3, 1.0471975512));
         world
             .create_entity()
@@ -230,19 +239,19 @@ impl SimpleState for ExampleState {
             let mesh_data = Shape::Cylinder(100, None).generate::<Vec<PosNormTex>>(None);
             let cylinder =
                 RayMesh(loader.load_from_data(mesh_data.into(), &mut progress, &mesh_storage));
-            let color = RayMaterial (Material{
+            let color = RayMaterial(Material {
                 albedo: loader.load_from_data(
-                    [135.0 / 255.0, 67.0 / 255.0, 23.0 / 255.0, 1.0].into(),
+                    [220.0 / 255.0, 30.0 / 255.0, 23.0 / 255.0, 1.0].into(),
                     &mut progress,
                     &tex_storage,
                 ),
                 ..data.world.read_resource::<MaterialDefaults>().0.clone()
             });
             (color, cylinder)
-    };
+        };
         data.world.add_resource(color);
         data.world.add_resource(cylinder);
-            }
+    }
 }
 
 #[derive(Default)]
@@ -261,7 +270,21 @@ impl<'s> System<'s> for PointingSystem {
         WriteExpect<'s, Loader>,
         Read<'s, InputHandler<String, String>>,
     );
-    fn run(&mut self, (cameras, physics_world, entities, mut transforms, ray_mesh, ray_material, mut meshs, mut materials, loader, input): Self::SystemData) {
+    fn run(
+        &mut self,
+        (
+            cameras,
+            physics_world,
+            entities,
+            mut transforms,
+            ray_mesh,
+            ray_material,
+            mut meshs,
+            mut materials,
+            loader,
+            input,
+        ): Self::SystemData,
+    ) {
         let mut rotation = None;
         let mut translation = None;
         for (_, transform) in (&cameras, &transforms).join() {
@@ -274,39 +297,41 @@ impl<'s> System<'s> for PointingSystem {
         };
         let r = rotation * Vector3::new(0.0, 0.0, 1.0);
         if input.keys_that_are_down().any(|k| k == VirtualKeyCode::Z) {
-             let mut t = Transform::default();
-             *t.translation_mut() = translation.clone();
-             *t.scale_mut() = Vector3::new(0.02, 0.02, 5.0);
-             t.face_towards(r, Vector3::new(0.0, 0.0, 1.0));
-             entities.build_entity()
-                 .with(t, &mut transforms)
-                 .with(ray_mesh.0.clone(), &mut meshs)
-                 .with(ray_material.0.clone(), &mut materials)
-                 .build();
+            let mut t = Transform::default();
+            *t.translation_mut() = translation.clone();
+            *t.scale_mut() = Vector3::new(0.02, 0.02, 5.0);
+            *t.rotation_mut() =
+                UnitQuaternion::new_observer_frame(&r, &Vector3::new(0.0, 1.0, 0.0));
+            entities
+                .build_entity()
+                .with(t, &mut transforms)
+                .with(ray_mesh.0.clone(), &mut meshs)
+                .with(ray_material.0.clone(), &mut materials)
+                .build();
 
-        let ray = Ray::new(
-            Point3::new(translation.x, translation.y, translation.z),
-            PhysicsVector3::new(r.x, r.y, r.z),
-        );
-        let all_groups = &CollisionGroups::new();
-        // println!("{:?}", rotation);
-        println!("{:?}", ray);
-        println!(
-            "{:?}",
-            physics_world
-                .collision_world()
-                .collision_objects()
-                .into_iter()
-                .map(|co| format!("{:?}", co.position()))
-                .collect::<Vec<_>>()
-        );
-        println!(
-            "{}",
-            physics_world
-                .collision_world()
-                .interferences_with_ray(&ray, all_groups)
-                .count()
-        );
+            let ray = Ray::new(
+                Point3::new(translation.x, translation.y, translation.z),
+                PhysicsVector3::new(r.x, r.y, r.z),
+            );
+            let all_groups = &CollisionGroups::new();
+            // println!("{:?}", rotation);
+            println!("{:?}", ray);
+            println!(
+                "{:?}",
+                physics_world
+                    .collision_world()
+                    .collision_objects()
+                    .into_iter()
+                    .map(|co| format!("{:?}", co.position()))
+                    .collect::<Vec<_>>()
+            );
+            println!(
+                "{}",
+                physics_world
+                    .collision_world()
+                    .interferences_with_ray(&ray, all_groups)
+                    .count()
+            );
         }
     }
 }
@@ -333,15 +358,23 @@ fn main() -> amethyst::Result<()> {
                 Some(String::from("move_x")),
                 Some(String::from("move_y")),
                 Some(String::from("move_z")),
-            ).with_sensitivity(0.1, 0.1),
-        )?.with_bundle(
+            )
+            .with_sensitivity(0.1, 0.1),
+        )?
+        .with_bundle(
             InputBundle::<String, String>::new().with_bindings_from_file(&key_bindings_path)?,
-        )?.with_bundle(TransformBundle::new().with_dep(&["fly_movement"]))?
+        )?
+        .with_bundle(TransformBundle::new().with_dep(&["fly_movement"]))?
         .with_bundle(UiBundle::<String, String>::new())?
         .with_bundle(
             RenderBundle::new(pipe, Some(DisplayConfig::load(&display_config_path)))
                 .with_sprite_sheet_processor(),
-        )?.with(PointingSystem::default(), "pointing_system", &["fly_movement"]);;
+        )?
+        .with(
+            PointingSystem::default(),
+            "pointing_system",
+            &["fly_movement"],
+        );;
     let mut game = Application::new("./", ExampleState::default(), game_data)?;
 
     game.run();
