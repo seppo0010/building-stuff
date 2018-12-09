@@ -4,13 +4,14 @@ extern crate ncollide3d;
 extern crate nphysics3d;
 
 use std::time::Duration;
+use std::{hash::Hash, marker::PhantomData};
+
 use amethyst::{
     assets::{Loader, ProgressCounter},
     controls::{FlyControlBundle, FlyControlTag},
     core::{
-        cgmath::{Quaternion, Rad, Vector3},
+        nalgebra::{Quaternion, UnitQuaternion, Vector3},
         transform::TransformBundle,
-        Time,
         Transform,
     },
     ecs::{Component, Entities, Join, Read, ReadExpect, ReadStorage, System, VecStorage, Write, WriteExpect, WriteStorage},
@@ -19,10 +20,12 @@ use amethyst::{
     renderer::{
         AmbientColor, Camera, DirectionalLight, DisplayConfig, DrawShaded, Light, Material,
         MaterialDefaults, MeshHandle, Pipeline, PosNormTex, Projection, RenderBundle, Rgba, Shape,
-        Stage,
+        Stage,VirtualKeyCode,
     },
     ui::{DrawUi, UiBundle, UiCreator},
     utils::application_root_dir,
+        input::InputHandler,
+
 };
 
 use nphysics3d::{
@@ -70,7 +73,7 @@ impl ExampleState {
             s.direction = *dir;
             s.color = Rgba(*color, *color, *color, 1.0);
             let mut t = Transform::default();
-            t.translation = Vector3::new(pos[0], pos[1], pos[2]);
+            *t.translation_mut() = Vector3::new(pos[0], pos[1], pos[2]);
 
             world
                 .create_entity()
@@ -106,8 +109,9 @@ impl ExampleState {
 
     fn create_cube(&mut self, world: &mut World, i: usize, physics_world: &mut MyWorld) {
         let mut t = Transform::default();
-        t.scale = Vector3::new(0.5, 0.5, 0.5);
-        t.translation = Vector3::new(
+        *t.scale_mut() = Vector3::new(0.5, 0.5, 0.5);
+        // *t.rotation_mut() = UnitQuaternion::new(0.5, 0.0, 0.5, 0.0);
+        *t.translation_mut() = Vector3::new(
             (i as f32) * 3.0 - 7.5,
             0.5,
             3.0 + (-1.0_f32).powf(i as f32) * 0.5,
@@ -118,10 +122,12 @@ impl ExampleState {
         let inertia = geom.inertia(1.0);
         let center_of_mass = geom.center_of_mass();
 
-        let pos = Isometry3::new(
-            PhysicsVector3::new(t.translation[0], t.translation[1], t.translation[2]),
+        let pos = {
+            let translation = t.translation();
+         Isometry3::new(
+            PhysicsVector3::new(translation[0], translation[1], translation[2]),
             na::zero(),
-        );
+        )};
 
             let body_handle = physics_world.add_rigid_body(pos, inertia, center_of_mass);
 
@@ -145,9 +151,9 @@ impl ExampleState {
 
     fn create_floor(&mut self, world: &mut World) {
         let mut t = Transform::default();
-        t.rotation = Quaternion::new(0.0, 1.0, 0.0, 0.0);
-        t.scale = Vector3::new(1000.0, 0.0, 1000.0);
-        t.translation = Vector3::new(0.0, 0.0, 0.0);
+        *t.rotation_mut() = UnitQuaternion::new(Vector3::new(0.0, 1.0, 0.0));
+        *t.scale_mut() = Vector3::new(1000.0, 0.0, 1000.0);
+        *t.translation_mut() = Vector3::new(0.0, 0.0, 0.0);
 
         let (plane, color) = {
             let mesh_storage = world.read_resource();
@@ -179,9 +185,9 @@ impl ExampleState {
 
     fn create_camera(&mut self, world: &mut World) {
         let mut t = Transform::default();
-        t.translation = Vector3::new(0.0, 1.8, 0.0);
-        t.rotation = Quaternion::new(0.0, 0.0, 1.0, 0.0);
-        let c = Camera::from(Projection::perspective(1.3, Rad(1.0471975512)));
+        *t.translation_mut() = Vector3::new(0.0, 1.8, 0.0);
+        *t.rotation_mut() = UnitQuaternion::from_quaternion(Quaternion::new(0.0, 0.0, 1.0, 0.0));
+        let c = Camera::from(Projection::perspective(1.3, 1.0471975512));
         world
             .create_entity()
             .named("camera")
@@ -201,7 +207,7 @@ impl ExampleState {
 pub struct RayMesh(MeshHandle);
 pub struct RayMaterial(Material);
 
-impl<'a, 'b> SimpleState<'a, 'b> for ExampleState {
+impl SimpleState for ExampleState {
     fn on_start(&mut self, data: StateData<GameData>) {
         data.world.register::<PhysicsBody>();
         let mut physics_world = MyWorld::default();
@@ -240,15 +246,12 @@ impl<'a, 'b> SimpleState<'a, 'b> for ExampleState {
 }
 
 #[derive(Default)]
-pub struct PointingSystem {
-    last_time: Option<Duration>,
-}
+pub struct PointingSystem;
 
 impl<'s> System<'s> for PointingSystem {
     type SystemData = (
         ReadStorage<'s, Camera>,
         Read<'s, MyWorld>,
-        Read<'s, Time>,
         Entities<'s>,
         WriteStorage<'s, Transform>,
         ReadExpect<'s, RayMesh>,
@@ -256,41 +259,37 @@ impl<'s> System<'s> for PointingSystem {
         WriteStorage<'s, MeshHandle>,
         WriteStorage<'s, Material>,
         WriteExpect<'s, Loader>,
+        Read<'s, InputHandler<String, String>>,
     );
-    fn run(&mut self, (cameras, physics_world, time, entities, mut transforms, ray_mesh, ray_material, mut meshs, mut materials, loader): Self::SystemData) {
+    fn run(&mut self, (cameras, physics_world, entities, mut transforms, ray_mesh, ray_material, mut meshs, mut materials, loader, input): Self::SystemData) {
         let mut rotation = None;
         let mut translation = None;
         for (_, transform) in (&cameras, &transforms).join() {
-            rotation = Some(transform.rotation);
-            translation = Some(transform.translation);
+            rotation = Some(transform.rotation().clone());
+            translation = Some(transform.translation().clone());
         }
         let (rotation, translation) = match (rotation, translation) {
             (Some(r), Some(t)) => (r, t),
             (_, _) => return,
         };
-        let r = rotation * Vector3::new(0.0, 0.0, -1.0);
-        let current_time = time.absolute_time();
-        if current_time - self.last_time.unwrap_or(Duration::new(0, 0)) >= Duration::new(2, 0) {
-            println!("{:?}", current_time);
-             self.last_time = Some(current_time);
+        let r = rotation * Vector3::new(0.0, 0.0, 1.0);
+        if input.keys_that_are_down().any(|k| k == VirtualKeyCode::Z) {
              let mut t = Transform::default();
-             t.translation = translation.clone();
-             t.rotation = Quaternion::new(0.0, r.x, r.y, r.z);
-             t.scale = Vector3::new(0.1, 0.1, 5.0);
+             *t.translation_mut() = translation.clone();
+             *t.scale_mut() = Vector3::new(0.02, 0.02, 5.0);
+             t.face_towards(r, Vector3::new(0.0, 0.0, 1.0));
              entities.build_entity()
                  .with(t, &mut transforms)
                  .with(ray_mesh.0.clone(), &mut meshs)
                  .with(ray_material.0.clone(), &mut materials)
                  .build();
 
-        }
         let ray = Ray::new(
             Point3::new(translation.x, translation.y, translation.z),
             PhysicsVector3::new(r.x, r.y, r.z),
         );
         let all_groups = &CollisionGroups::new();
         // println!("{:?}", rotation);
-        /*
         println!("{:?}", ray);
         println!(
             "{:?}",
@@ -308,7 +307,7 @@ impl<'s> System<'s> for PointingSystem {
                 .interferences_with_ray(&ray, all_groups)
                 .count()
         );
-        */
+        }
     }
 }
 
