@@ -2,10 +2,15 @@ extern crate amethyst;
 extern crate nalgebra as na;
 extern crate ncollide3d;
 extern crate nphysics3d;
+extern crate nphysics_testbed3d;
+extern crate specs;
 
 use std::time::Duration;
+use std::ops::{Deref, DerefMut};
+use nphysics_testbed3d::Testbed;                 // The testbed to display/run the simulation.
 use std::{hash::Hash, marker::PhantomData};
 
+use specs::Entity;
 use amethyst::{
     assets::{Loader, ProgressCounter},
     controls::{FlyControlBundle, FlyControlTag},
@@ -34,20 +39,46 @@ use nphysics3d::{
     math::Vector,
     object::{BodyHandle, Material as PhysicsMaterial, Multibody, RigidBody},
     volumetric::Volumetric,
-    world::World as PhysicsWorld,
 };
 
 use na::{Isometry3, Point3, Vector3 as PhysicsVector3};
 
 use ncollide3d::{
     query::Ray,
-    shape::{Cuboid, ShapeHandle},
-    world::CollisionGroups,
+    shape::{Cylinder, Cuboid, ShapeHandle},
+    world::{GeometricQueryType, CollisionWorld, CollisionGroups, CollisionObjectHandle},
 };
 
-pub struct PhysicsBody(BodyHandle);
-type MyWorld = PhysicsWorld<f32>;
+const COLLIDER_MARGIN: f32 = 0.01;
 
+type MyCollisionWorld = CollisionWorld<f32, Entity>;
+pub struct MyWorld {
+    inner: MyCollisionWorld ,
+}
+
+impl Default for MyWorld {
+    fn default() -> Self {
+        MyWorld {
+            inner: CollisionWorld::new(COLLIDER_MARGIN),
+        }
+    }
+}
+
+impl Deref for MyWorld {
+    type Target = MyCollisionWorld;
+
+    fn deref(&self) -> &MyCollisionWorld {
+        &self.inner
+    }
+}
+
+impl DerefMut for MyWorld {
+    fn deref_mut(&mut self) -> &mut MyCollisionWorld {
+        &mut self.inner
+    }
+}
+
+pub struct PhysicsBody(CollisionObjectHandle);
 impl Component for PhysicsBody {
     type Storage = VecStorage<Self>;
 }
@@ -112,16 +143,14 @@ impl ExampleState {
     fn create_cube(&mut self, world: &mut World, i: usize, physics_world: &mut MyWorld) {
         let mut t = Transform::default();
         *t.scale_mut() = Vector3::new(0.5, 0.5, 0.5);
-        // *t.rotation_mut() = UnitQuaternion::new(0.5, 0.0, 0.5, 0.0);
         *t.translation_mut() = Vector3::new(
             (i as f32) * 3.0 - 7.5,
             0.5,
             3.0 + (-1.0_f32).powf(i as f32) * 0.5,
         );
-        const COLLIDER_MARGIN: f32 = 0.01;
 
         let geom = ShapeHandle::new(Cuboid::new(PhysicsVector3::repeat(
-            1000.5 - COLLIDER_MARGIN,
+            0.5 - COLLIDER_MARGIN,
         )));
         let inertia = geom.inertia(1.0);
         let center_of_mass = geom.center_of_mass();
@@ -134,18 +163,16 @@ impl ExampleState {
             )
         };
 
-        let body_handle = physics_world.add_rigid_body(pos, inertia, center_of_mass);
-
-        let _collider_handle = physics_world.add_collider(
-            COLLIDER_MARGIN,
-            geom.clone(),
-            body_handle,
+        let mut entity_builder = world.create_entity();
+        let body_handle = physics_world.add(
             Isometry3::identity(),
-            PhysicsMaterial::default(),
+            geom.clone(),
+            CollisionGroups::new(),
+            GeometricQueryType::Contacts(COLLIDER_MARGIN, COLLIDER_MARGIN),
+            entity_builder.entity,
         );
 
-        world
-            .create_entity()
+        entity_builder
             .named(format!("box{}", i))
             .with(t)
             .with(self.cube_mesh.clone().unwrap())
@@ -220,15 +247,48 @@ impl SimpleState for ExampleState {
     fn on_start(&mut self, data: StateData<GameData>) {
         data.world.register::<PhysicsBody>();
         let mut physics_world = MyWorld::default();
-        physics_world.set_gravity(Vector::new(0., 0., 0.));
         self.create_light(data.world);
         self.create_floor(data.world);
         self.prepare_cubes(data.world);
         for i in 0..5 {
             self.create_cube(data.world, i, &mut physics_world);
         }
+        physics_world.update();
         self.create_camera(data.world);
         self.create_center(data.world);
+        /*
+        // Ray { origin: Point { coords: Matrix { data: [] } }, dir: Matrix { data: [-85.21414, 52.10125, -4.914212] } }
+        const COLLIDER_MARGIN: f32 = 0.01;
+
+        let geom = ShapeHandle::new(Cuboid::new(PhysicsVector3::new(
+            0.5 - COLLIDER_MARGIN,
+            0.5 - COLLIDER_MARGIN,
+            5.0 - COLLIDER_MARGIN,
+        )));
+        let inertia = geom.inertia(1.0);
+        let center_of_mass = geom.center_of_mass();
+
+            // let mut pos = Isometry3::new(
+                // PhysicsVector3::new(-2.1552098, 0.84430635, 3.1367867),
+                // na::zero(),
+            // );
+            let pos = Isometry3::new_observer_frame(&Point3::new(-2.1552098, 0.84430635, 3.1367867), &Point3::new(0.94344926, 0.1426293, 0.29927546), &PhysicsVector3::new(0.0, 0.0, 1.0));
+
+        let body_handle = physics_world.add_rigid_body(pos, inertia, center_of_mass);
+
+// Ray { origin: Point { coords: Matrix { data: [] } }, dir: Matrix { data: [] } }
+        let _collider_handle = physics_world.add_collider(
+            COLLIDER_MARGIN,
+            geom.clone(),
+            body_handle,
+            Isometry3::identity(),
+            PhysicsMaterial::default(),
+        );
+        */
+        // HERE
+        // let mut t = Testbed::new(physics_world);
+        // t.hide_performance_counters();
+        // t.run();
         data.world.add_resource(physics_world);
 
         let (color, cylinder) = {
@@ -309,29 +369,18 @@ impl<'s> System<'s> for PointingSystem {
                 .with(ray_material.0.clone(), &mut materials)
                 .build();
 
+            // let ray = Isometry3::new_observer_frame(&Point3::new(-2.1552098, 0.84430635, 3.1367867), &Point3::new(0.94344926, 0.1426293, 0.29927546), &PhysicsVector3::new(0.0, 0.0, 1.0)).into();
             let ray = Ray::new(
-                Point3::new(translation.x, translation.y, translation.z),
-                PhysicsVector3::new(r.x, r.y, r.z),
+                Point3::new(0.0, 0.0, 0.0),
+                PhysicsVector3::new(-7.5, 0.5, 3.5),
             );
             let all_groups = &CollisionGroups::new();
-            // println!("{:?}", rotation);
-            println!("{:?}", ray);
-            println!(
-                "{:?}",
-                physics_world
-                    .collision_world()
-                    .collision_objects()
-                    .into_iter()
-                    .map(|co| format!("{:?}", co.position()))
-                    .collect::<Vec<_>>()
-            );
-            println!(
-                "{}",
-                physics_world
-                    .collision_world()
-                    .interferences_with_ray(&ray, all_groups)
-                    .count()
-            );
+            if let Some((col, inter)) = physics_world
+                .interferences_with_ray(&ray, all_groups)
+                .into_iter()
+                .next() {
+                println!("{:?}", col.data());
+            }
         }
     }
 }
@@ -374,7 +423,7 @@ fn main() -> amethyst::Result<()> {
             PointingSystem::default(),
             "pointing_system",
             &["fly_movement"],
-        );;
+        );
     let mut game = Application::new("./", ExampleState::default(), game_data)?;
 
     game.run();
