@@ -45,7 +45,7 @@ use na::{Isometry3, Point3, Vector3 as PhysicsVector3};
 
 use ncollide3d::{
     query::Ray,
-    shape::{Cylinder, Cuboid, ShapeHandle},
+    shape::{Cuboid, ShapeHandle},
     world::{GeometricQueryType, CollisionWorld, CollisionGroups, CollisionObjectHandle},
 };
 
@@ -152,20 +152,16 @@ impl ExampleState {
         let geom = ShapeHandle::new(Cuboid::new(PhysicsVector3::repeat(
             0.5 - COLLIDER_MARGIN,
         )));
-        let inertia = geom.inertia(1.0);
-        let center_of_mass = geom.center_of_mass();
 
-        let pos = {
-            let translation = t.translation();
-            Isometry3::new(
-                PhysicsVector3::new(translation[0], translation[1], translation[2]),
-                na::zero(),
-            )
-        };
-
-        let mut entity_builder = world.create_entity();
+        let entity_builder = world.create_entity();
         let body_handle = physics_world.add(
-            Isometry3::identity(),
+            Isometry3::new(
+                {
+                    let translation = t.translation();
+                    PhysicsVector3::new(translation[0], translation[1], translation[2])
+                },
+                na::zero(),
+            ),
             geom.clone(),
             CollisionGroups::new(),
             GeometricQueryType::Contacts(COLLIDER_MARGIN, COLLIDER_MARGIN),
@@ -254,41 +250,9 @@ impl SimpleState for ExampleState {
             self.create_cube(data.world, i, &mut physics_world);
         }
         physics_world.update();
+        println!("AAAAAAAAAAAAAAAAAAAAAAAAAAAH\n{:?}", physics_world.collision_objects().map(|x| format!("{:?}", x.position())).collect::<Vec<_>>());
         self.create_camera(data.world);
         self.create_center(data.world);
-        /*
-        // Ray { origin: Point { coords: Matrix { data: [] } }, dir: Matrix { data: [-85.21414, 52.10125, -4.914212] } }
-        const COLLIDER_MARGIN: f32 = 0.01;
-
-        let geom = ShapeHandle::new(Cuboid::new(PhysicsVector3::new(
-            0.5 - COLLIDER_MARGIN,
-            0.5 - COLLIDER_MARGIN,
-            5.0 - COLLIDER_MARGIN,
-        )));
-        let inertia = geom.inertia(1.0);
-        let center_of_mass = geom.center_of_mass();
-
-            // let mut pos = Isometry3::new(
-                // PhysicsVector3::new(-2.1552098, 0.84430635, 3.1367867),
-                // na::zero(),
-            // );
-            let pos = Isometry3::new_observer_frame(&Point3::new(-2.1552098, 0.84430635, 3.1367867), &Point3::new(0.94344926, 0.1426293, 0.29927546), &PhysicsVector3::new(0.0, 0.0, 1.0));
-
-        let body_handle = physics_world.add_rigid_body(pos, inertia, center_of_mass);
-
-// Ray { origin: Point { coords: Matrix { data: [] } }, dir: Matrix { data: [] } }
-        let _collider_handle = physics_world.add_collider(
-            COLLIDER_MARGIN,
-            geom.clone(),
-            body_handle,
-            Isometry3::identity(),
-            PhysicsMaterial::default(),
-        );
-        */
-        // HERE
-        // let mut t = Testbed::new(physics_world);
-        // t.hide_performance_counters();
-        // t.run();
         data.world.add_resource(physics_world);
 
         let (color, cylinder) = {
@@ -369,13 +333,13 @@ impl<'s> System<'s> for PointingSystem {
                 .with(ray_material.0.clone(), &mut materials)
                 .build();
 
-            // let ray = Isometry3::new_observer_frame(&Point3::new(-2.1552098, 0.84430635, 3.1367867), &Point3::new(0.94344926, 0.1426293, 0.29927546), &PhysicsVector3::new(0.0, 0.0, 1.0)).into();
             let ray = Ray::new(
-                Point3::new(0.0, 0.0, 0.0),
-                PhysicsVector3::new(-7.5, 0.5, 3.5),
+                Point3::new(translation.x, translation.y, translation.z),
+                PhysicsVector3::new(r.x, r.y, r.z),
             );
+            println!("{:?}", ray);
             let all_groups = &CollisionGroups::new();
-            if let Some((col, inter)) = physics_world
+            if let Some((col, _inter)) = physics_world
                 .interferences_with_ray(&ray, all_groups)
                 .into_iter()
                 .next() {
