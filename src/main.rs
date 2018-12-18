@@ -5,40 +5,30 @@ extern crate nphysics3d;
 extern crate nphysics_testbed3d;
 extern crate specs;
 
-use std::time::Duration;
 use std::ops::{Deref, DerefMut};
-use nphysics_testbed3d::Testbed;                 // The testbed to display/run the simulation.
-use std::{hash::Hash, marker::PhantomData};
 
 use specs::Entity;
 use amethyst::{
     assets::{Loader, ProgressCounter},
     controls::{FlyControlBundle, FlyControlTag},
     core::{
-        nalgebra::{Quaternion, UnitQuaternion, Vector3},
+        nalgebra::{UnitQuaternion, Vector3},
         transform::TransformBundle,
         Transform,
     },
     ecs::{
-        Component, Entities, Join, Read, ReadExpect, ReadStorage, System, VecStorage, Write,
-        WriteExpect, WriteStorage,
+        Component, Join, Read, ReadStorage, System, VecStorage,
+        Write,
     },
     input::InputBundle,
-    input::InputHandler,
     prelude::*,
     renderer::{
         AmbientColor, Camera, DirectionalLight, DisplayConfig, DrawShaded, Light, Material,
         MaterialDefaults, MeshHandle, Pipeline, PosNormTex, Projection, RenderBundle, Rgba, Shape,
-        Stage, VirtualKeyCode,
+        Stage,
     },
     ui::{DrawUi, UiBundle, UiCreator},
     utils::application_root_dir,
-};
-
-use nphysics3d::{
-    math::Vector,
-    object::{BodyHandle, Material as PhysicsMaterial, Multibody, RigidBody},
-    volumetric::Volumetric,
 };
 
 use na::{Isometry3, Point3, Vector3 as PhysicsVector3};
@@ -78,6 +68,12 @@ impl DerefMut for MyWorld {
     }
 }
 
+#[derive(Clone, PartialEq)]
+pub struct CubeName(String);
+impl Component for CubeName {
+    type Storage = VecStorage<Self>;
+}
+
 pub struct PhysicsBody(CollisionObjectHandle);
 impl Component for PhysicsBody {
     type Storage = VecStorage<Self>;
@@ -87,6 +83,7 @@ impl Component for PhysicsBody {
 struct ExampleState {
     cube_mesh: Option<MeshHandle>,
     cube_materials: Vec<Material>,
+    cube_names: Vec<String>,
 }
 
 impl ExampleState {
@@ -124,15 +121,14 @@ impl ExampleState {
         let mesh_data = Shape::Cube.generate::<Vec<PosNormTex>>(None);
         self.cube_mesh =
             Some(loader.load_from_data(mesh_data.into(), &mut progress, &mesh_storage));
-        for color in [
-            [0.0, 1.0, 0.0, 1.0],
-            [1.0, 1.0, 0.0, 1.0],
-            [1.0, 0.0, 0.0, 1.0],
-            [1.0, 0.0, 1.0, 1.0],
-            [0.0, 0.0, 1.0, 1.0],
-        ]
-        .into_iter()
-        {
+        for (color, name) in [
+            ([0.0, 1.0, 0.0, 1.0], "green"),
+            ([1.0, 1.0, 0.0, 1.0], "yellow"),
+            ([1.0, 0.0, 0.0, 1.0], "red"),
+            ([1.0, 0.0, 1.0, 1.0], "pink"),
+            ([0.0, 0.0, 1.0, 1.0], "blue"),
+        ].into_iter() {
+            self.cube_names.push(name.to_string());
             self.cube_materials.push(Material {
                 albedo: loader.load_from_data((*color).into(), &mut progress, &tex_storage),
                 ..world.read_resource::<MaterialDefaults>().0.clone()
@@ -173,6 +169,7 @@ impl ExampleState {
             .with(t)
             .with(self.cube_mesh.clone().unwrap())
             .with(self.cube_materials[i].clone())
+            .with(CubeName(self.cube_names[i].clone()))
             .with(PhysicsBody(body_handle))
             .build();
     }
@@ -214,7 +211,6 @@ impl ExampleState {
     fn create_camera(&mut self, world: &mut World) {
         let mut t = Transform::default();
         *t.translation_mut() = Vector3::new(0.0, 1.8, 0.0);
-        // *t.rotation_mut() = UnitQuaternion::from_quaternion(Quaternion::new(0.0, 0.0, 1.0, 0.0));
         *t.rotation_mut() = UnitQuaternion::new_observer_frame(
             &Vector3::new(0.0, 0.0, -1.0),
             &Vector3::new(0.0, 1.0, 0.0),
@@ -236,9 +232,6 @@ impl ExampleState {
         });
     }
 }
-pub struct RayMesh(MeshHandle);
-pub struct RayMaterial(Material);
-
 impl SimpleState for ExampleState {
     fn on_start(&mut self, data: StateData<GameData>) {
         data.world.register::<PhysicsBody>();
@@ -250,31 +243,9 @@ impl SimpleState for ExampleState {
             self.create_cube(data.world, i, &mut physics_world);
         }
         physics_world.update();
-        println!("AAAAAAAAAAAAAAAAAAAAAAAAAAAH\n{:?}", physics_world.collision_objects().map(|x| format!("{:?}", x.position())).collect::<Vec<_>>());
         self.create_camera(data.world);
         self.create_center(data.world);
         data.world.add_resource(physics_world);
-
-        let (color, cylinder) = {
-            let mesh_storage = data.world.read_resource();
-            let tex_storage = data.world.read_resource();
-            let mut progress = ProgressCounter::default();
-            let loader = data.world.read_resource::<Loader>();
-            let mesh_data = Shape::Cylinder(100, None).generate::<Vec<PosNormTex>>(None);
-            let cylinder =
-                RayMesh(loader.load_from_data(mesh_data.into(), &mut progress, &mesh_storage));
-            let color = RayMaterial(Material {
-                albedo: loader.load_from_data(
-                    [220.0 / 255.0, 30.0 / 255.0, 23.0 / 255.0, 1.0].into(),
-                    &mut progress,
-                    &tex_storage,
-                ),
-                ..data.world.read_resource::<MaterialDefaults>().0.clone()
-            });
-            (color, cylinder)
-        };
-        data.world.add_resource(color);
-        data.world.add_resource(cylinder);
     }
 }
 
@@ -285,28 +256,18 @@ impl<'s> System<'s> for PointingSystem {
     type SystemData = (
         ReadStorage<'s, Camera>,
         Read<'s, MyWorld>,
-        Entities<'s>,
-        WriteStorage<'s, Transform>,
-        ReadExpect<'s, RayMesh>,
-        ReadExpect<'s, RayMaterial>,
-        WriteStorage<'s, MeshHandle>,
-        WriteStorage<'s, Material>,
-        WriteExpect<'s, Loader>,
-        Read<'s, InputHandler<String, String>>,
+        ReadStorage<'s, Transform>,
+        ReadStorage<'s, CubeName>,
+        Write<'s, Option<CubeName>>,
     );
     fn run(
         &mut self,
         (
             cameras,
             physics_world,
-            entities,
-            mut transforms,
-            ray_mesh,
-            ray_material,
-            mut meshs,
-            mut materials,
-            loader,
-            input,
+            transforms,
+            cube_names,
+            mut cube_name,
         ): Self::SystemData,
     ) {
         let mut rotation = None;
@@ -320,31 +281,23 @@ impl<'s> System<'s> for PointingSystem {
             (_, _) => return,
         };
         let r = rotation * Vector3::new(0.0, 0.0, 1.0);
-        if input.keys_that_are_down().any(|k| k == VirtualKeyCode::Z) {
-            let mut t = Transform::default();
-            *t.translation_mut() = translation.clone();
-            *t.scale_mut() = Vector3::new(0.02, 0.02, 5.0);
-            *t.rotation_mut() =
-                UnitQuaternion::new_observer_frame(&r, &Vector3::new(0.0, 1.0, 0.0));
-            entities
-                .build_entity()
-                .with(t, &mut transforms)
-                .with(ray_mesh.0.clone(), &mut meshs)
-                .with(ray_material.0.clone(), &mut materials)
-                .build();
-
-            let ray = Ray::new(
-                Point3::new(translation.x, translation.y, translation.z),
-                PhysicsVector3::new(r.x, r.y, r.z),
-            );
-            println!("{:?}", ray);
-            let all_groups = &CollisionGroups::new();
-            if let Some((col, _inter)) = physics_world
-                .interferences_with_ray(&ray, all_groups)
-                .into_iter()
-                .next() {
-                println!("{:?}", col.data());
+        let ray = Ray::new(
+            Point3::new(translation.x, translation.y, translation.z),
+            PhysicsVector3::new(-r.x, -r.y, -r.z),
+        );
+        let all_groups = &CollisionGroups::new();
+        if let Some((col, _inter)) = physics_world
+            .interferences_with_ray(&ray, all_groups)
+            .into_iter()
+            .next() {
+            let c = cube_names.get(*col.data()).unwrap().clone();
+            if Some(&c) != cube_name.as_ref() {
+                println!("{}", c.0);
+                *cube_name = Some(c);
             }
+        } else if cube_name.is_some() {
+            *cube_name = None;
+            println!("watching no cube");
         }
     }
 }
