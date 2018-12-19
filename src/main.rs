@@ -6,6 +6,7 @@ extern crate specs;
 
 use std::{
     cmp::Ordering,
+    collections::HashMap,
     ops::{Deref, DerefMut},
 };
 
@@ -31,13 +32,14 @@ use amethyst::{
 
 use na::{Isometry3, Point3, Vector3 as PhysicsVector3};
 
-use nphysics3d::{
-    world::{World as PhysicsWorld},
-};
 use ncollide3d::{
     query::Ray,
     shape::{Cuboid, ShapeHandle},
-    world::{CollisionGroups, CollisionObjectHandle, GeometricQueryType},
+    world::{CollisionGroups, CollisionObjectHandle},
+};
+use nphysics3d::{
+    object::{BodyHandle, ColliderHandle, Material as PhysicsMaterial},
+    world::World as PhysicsWorld,
 };
 
 const COLLIDER_MARGIN: f32 = 0.01;
@@ -139,7 +141,13 @@ impl ExampleState {
         }
     }
 
-    fn create_cube(&mut self, world: &mut World, i: usize, physics_world: &mut MyWorld) {
+    fn create_cube(
+        &mut self,
+        world: &mut World,
+        i: usize,
+        physics_world: &mut MyWorld,
+        cube_names: &mut HashMap<ColliderHandle, CubeName>,
+    ) {
         let mut t = Transform::default();
         *t.scale_mut() = Vector3::new(0.5, 0.5, 0.5);
         *t.translation_mut() = Vector3::new(
@@ -150,8 +158,10 @@ impl ExampleState {
 
         let geom = ShapeHandle::new(Cuboid::new(PhysicsVector3::repeat(0.5 - COLLIDER_MARGIN)));
 
-        let entity_builder = world.create_entity();
-        let body_handle = physics_world.add(
+        let body_handle = physics_world.add_collider(
+            COLLIDER_MARGIN,
+            geom.clone(),
+            BodyHandle::ground(),
             Isometry3::new(
                 {
                     let translation = t.translation();
@@ -159,18 +169,16 @@ impl ExampleState {
                 },
                 na::zero(),
             ),
-            geom.clone(),
-            CollisionGroups::new(),
-            GeometricQueryType::Contacts(COLLIDER_MARGIN, COLLIDER_MARGIN),
-            entity_builder.entity,
+            PhysicsMaterial::default(),
         );
+        cube_names.insert(body_handle, CubeName(self.cube_names[i].clone()));
 
-        entity_builder
+        world
+            .create_entity()
             .named(format!("box{}", i))
             .with(t)
             .with(self.cube_mesh.clone().unwrap())
             .with(self.cube_materials[i].clone())
-            .with(CubeName(self.cube_names[i].clone()))
             .with(PhysicsBody(body_handle))
             .build();
     }
@@ -240,13 +248,15 @@ impl SimpleState for ExampleState {
         self.create_light(data.world);
         self.create_floor(data.world);
         self.prepare_cubes(data.world);
+        let mut cube_names = HashMap::with_capacity(5);
         for i in 0..5 {
-            self.create_cube(data.world, i, &mut physics_world);
+            self.create_cube(data.world, i, &mut physics_world, &mut cube_names);
         }
-        physics_world.update();
+        physics_world.step();
         self.create_camera(data.world);
         self.create_center(data.world);
         data.world.add_resource(physics_world);
+        data.world.add_resource(cube_names);
     }
 }
 
@@ -258,7 +268,7 @@ impl<'s> System<'s> for PointingSystem {
         ReadStorage<'s, Camera>,
         Read<'s, MyWorld>,
         ReadStorage<'s, Transform>,
-        ReadStorage<'s, CubeName>,
+        Read<'s, HashMap<ColliderHandle, CubeName>>,
         Write<'s, Option<CubeName>>,
     );
     fn run(
@@ -282,6 +292,7 @@ impl<'s> System<'s> for PointingSystem {
         );
         let all_groups = &CollisionGroups::new();
         let current_cube_name = physics_world
+            .collision_world()
             .interferences_with_ray(&ray, all_groups)
             .into_iter()
             .min_by(|(_, inter1), (_, inter2)| {
@@ -290,7 +301,7 @@ impl<'s> System<'s> for PointingSystem {
                     .partial_cmp(&inter2.toi)
                     .unwrap_or(Ordering::Equal)
             })
-            .and_then(|(col, _)| cube_names.get(*col.data()));
+            .and_then(|(col, _)| cube_names.get(&col.handle()));
 
         if current_cube_name != cube_name.as_ref() {
             *cube_name = current_cube_name.map(|x| x.clone());
