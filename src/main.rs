@@ -10,7 +10,6 @@ use std::{
     ops::{Deref, DerefMut},
 };
 
-use specs::Entity;
 use amethyst::{
     assets::{Loader, ProgressCounter},
     controls::{FlyControlBundle, FlyControlTag},
@@ -19,10 +18,7 @@ use amethyst::{
         transform::TransformBundle,
         Transform,
     },
-    ecs::{
-        Component, Join, Read, ReadStorage, System, VecStorage,
-        Write,
-    },
+    ecs::{Component, Join, Read, ReadStorage, System, VecStorage, Write},
     input::InputBundle,
     prelude::*,
     renderer::{
@@ -33,20 +29,21 @@ use amethyst::{
     ui::{DrawUi, UiBundle, UiCreator},
     utils::application_root_dir,
 };
+use specs::Entity;
 
 use na::{Isometry3, Point3, Vector3 as PhysicsVector3};
 
 use ncollide3d::{
     query::Ray,
     shape::{Cuboid, ShapeHandle},
-    world::{GeometricQueryType, CollisionWorld, CollisionGroups, CollisionObjectHandle},
+    world::{CollisionGroups, CollisionObjectHandle, CollisionWorld, GeometricQueryType},
 };
 
 const COLLIDER_MARGIN: f32 = 0.01;
 
 type MyCollisionWorld = CollisionWorld<f32, Entity>;
 pub struct MyWorld {
-    inner: MyCollisionWorld ,
+    inner: MyCollisionWorld,
 }
 
 impl Default for MyWorld {
@@ -130,7 +127,9 @@ impl ExampleState {
             ([1.0, 0.0, 0.0, 1.0], "red"),
             ([1.0, 0.0, 1.0, 1.0], "pink"),
             ([0.0, 0.0, 1.0, 1.0], "blue"),
-        ].into_iter() {
+        ]
+        .into_iter()
+        {
             self.cube_names.push(name.to_string());
             self.cube_materials.push(Material {
                 albedo: loader.load_from_data((*color).into(), &mut progress, &tex_storage),
@@ -148,9 +147,7 @@ impl ExampleState {
             3.0 + (-1.0_f32).powf(i as f32) * 0.5,
         );
 
-        let geom = ShapeHandle::new(Cuboid::new(PhysicsVector3::repeat(
-            0.5 - COLLIDER_MARGIN,
-        )));
+        let geom = ShapeHandle::new(Cuboid::new(PhysicsVector3::repeat(0.5 - COLLIDER_MARGIN)));
 
         let entity_builder = world.create_entity();
         let body_handle = physics_world.add(
@@ -265,13 +262,7 @@ impl<'s> System<'s> for PointingSystem {
     );
     fn run(
         &mut self,
-        (
-            cameras,
-            physics_world,
-            transforms,
-            cube_names,
-            mut cube_name,
-        ): Self::SystemData,
+        (cameras, physics_world, transforms, cube_names, mut cube_name): Self::SystemData,
     ) {
         let mut rotation = None;
         let mut translation = None;
@@ -292,12 +283,20 @@ impl<'s> System<'s> for PointingSystem {
         let current_cube_name = physics_world
             .interferences_with_ray(&ray, all_groups)
             .into_iter()
-            .min_by(|(_, inter1), (_, inter2)| inter1.toi.partial_cmp(&inter2.toi).unwrap_or(Ordering::Equal))
+            .min_by(|(_, inter1), (_, inter2)| {
+                inter1
+                    .toi
+                    .partial_cmp(&inter2.toi)
+                    .unwrap_or(Ordering::Equal)
+            })
             .and_then(|(col, _)| cube_names.get(*col.data()));
 
         if current_cube_name != cube_name.as_ref() {
             *cube_name = current_cube_name.map(|x| x.clone());
-            println!("watching {}", current_cube_name.map(|x| &*x.0).unwrap_or("no cube"));
+            println!(
+                "watching {}",
+                current_cube_name.map(|x| &*x.0).unwrap_or("no cube")
+            );
         }
     }
 }
