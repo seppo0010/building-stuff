@@ -28,19 +28,21 @@ use amethyst::{
     ui::{DrawUi, UiBundle, UiCreator},
     utils::application_root_dir,
 };
-use specs::Entity;
 
 use na::{Isometry3, Point3, Vector3 as PhysicsVector3};
 
+use nphysics3d::{
+    world::{World as PhysicsWorld},
+};
 use ncollide3d::{
     query::Ray,
     shape::{Cuboid, ShapeHandle},
-    world::{CollisionGroups, CollisionObjectHandle, CollisionWorld, GeometricQueryType},
+    world::{CollisionGroups, CollisionObjectHandle, GeometricQueryType},
 };
 
 const COLLIDER_MARGIN: f32 = 0.01;
 
-type MyCollisionWorld = CollisionWorld<f32, Entity>;
+type MyCollisionWorld = PhysicsWorld<f32>;
 pub struct MyWorld {
     inner: MyCollisionWorld,
 }
@@ -48,7 +50,7 @@ pub struct MyWorld {
 impl Default for MyWorld {
     fn default() -> Self {
         MyWorld {
-            inner: CollisionWorld::new(COLLIDER_MARGIN),
+            inner: MyCollisionWorld::new(),
         }
     }
 }
