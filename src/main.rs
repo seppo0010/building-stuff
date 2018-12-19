@@ -5,7 +5,10 @@ extern crate nphysics3d;
 extern crate nphysics_testbed3d;
 extern crate specs;
 
-use std::ops::{Deref, DerefMut};
+use std::{
+    cmp::Ordering,
+    ops::{Deref, DerefMut},
+};
 
 use specs::Entity;
 use amethyst::{
@@ -286,18 +289,15 @@ impl<'s> System<'s> for PointingSystem {
             PhysicsVector3::new(-r.x, -r.y, -r.z),
         );
         let all_groups = &CollisionGroups::new();
-        if let Some((col, _inter)) = physics_world
+        let current_cube_name = physics_world
             .interferences_with_ray(&ray, all_groups)
             .into_iter()
-            .next() {
-            let c = cube_names.get(*col.data()).unwrap().clone();
-            if Some(&c) != cube_name.as_ref() {
-                println!("{}", c.0);
-                *cube_name = Some(c);
-            }
-        } else if cube_name.is_some() {
-            *cube_name = None;
-            println!("watching no cube");
+            .min_by(|(_, inter1), (_, inter2)| inter1.toi.partial_cmp(&inter2.toi).unwrap_or(Ordering::Equal))
+            .and_then(|(col, _)| cube_names.get(*col.data()));
+
+        if current_cube_name != cube_name.as_ref() {
+            *cube_name = current_cube_name.map(|x| x.clone());
+            println!("watching {}", current_cube_name.map(|x| &*x.0).unwrap_or("no cube"));
         }
     }
 }

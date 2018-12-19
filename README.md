@@ -8,7 +8,7 @@ I'm using this project to learn [Amethyst](https://amethyst.rs) and
 * ~Floor and sky~
 * ~Show boxes of different colors on the floor~
 * ~Mouse to look around~
-* Cursor in the center and pointing to boxes prints the color
-* Hold click to move boxes, release to drop them
+* ~Cursor in the center and pointing to boxes prints the color~
 * Include physics engine
+* Hold click to move boxes, release to drop them
 * Right click to rotate box
