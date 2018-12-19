@@ -2,7 +2,6 @@ extern crate amethyst;
 extern crate nalgebra as na;
 extern crate ncollide3d;
 extern crate nphysics3d;
-extern crate nphysics_testbed3d;
 extern crate specs;
 
 use std::{
