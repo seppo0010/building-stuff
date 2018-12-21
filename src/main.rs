@@ -18,7 +18,7 @@ use amethyst::{
         transform::TransformBundle,
         Transform,
     },
-    ecs::{Component, Join, Read, ReadStorage, System, VecStorage, Write},
+    ecs::{Component, Join, Read, ReadStorage, System, VecStorage, Write, WriteStorage},
     input::InputBundle,
     prelude::*,
     renderer::{
@@ -39,6 +39,7 @@ use ncollide3d::{
 };
 use nphysics3d::{
     object::{BodyHandle, ColliderHandle, Material as PhysicsMaterial},
+    volumetric::Volumetric,
     world::World as PhysicsWorld,
 };
 
@@ -152,23 +153,28 @@ impl ExampleState {
         *t.scale_mut() = Vector3::new(0.5, 0.5, 0.5);
         *t.translation_mut() = Vector3::new(
             (i as f32) * 3.0 - 7.5,
-            0.5,
+            (i as f32) * 3.0 + 100.5,
             3.0 + (-1.0_f32).powf(i as f32) * 0.5,
         );
 
         let geom = ShapeHandle::new(Cuboid::new(PhysicsVector3::repeat(0.5 - COLLIDER_MARGIN)));
+        let inertia = geom.inertia(1.0);
+        let center_of_mass = geom.center_of_mass();
+
+        let pos = Isometry3::new(
+            {
+                let translation = t.translation();
+                PhysicsVector3::new(translation[0], translation[1], translation[2])
+            },
+            na::zero(),
+        );
+        let handle = physics_world.add_rigid_body(pos, inertia, center_of_mass);
 
         let body_handle = physics_world.add_collider(
             COLLIDER_MARGIN,
             geom.clone(),
-            BodyHandle::ground(),
-            Isometry3::new(
-                {
-                    let translation = t.translation();
-                    PhysicsVector3::new(translation[0], translation[1], translation[2])
-                },
-                na::zero(),
-            ),
+            handle,
+            Isometry3::identity(),
             PhysicsMaterial::default(),
         );
         cube_names.insert(body_handle, CubeName(self.cube_names[i].clone()));
@@ -183,7 +189,7 @@ impl ExampleState {
             .build();
     }
 
-    fn create_floor(&mut self, world: &mut World) {
+    fn create_floor(&mut self, world: &mut World, physics_world: &mut MyWorld) {
         let mut t = Transform::default();
         *t.rotation_mut() = UnitQuaternion::new(Vector3::new(0.0, 1.0, 0.0));
         *t.scale_mut() = Vector3::new(1000.0, 0.0, 1000.0);
@@ -207,6 +213,16 @@ impl ExampleState {
             };
             (plane, color)
         };
+
+        let geom = ShapeHandle::new(Cuboid::new(PhysicsVector3::new(1000.0, 0.0, 1000.0)));
+
+        physics_world.add_collider(
+            COLLIDER_MARGIN,
+            geom.clone(),
+            BodyHandle::ground(),
+            Isometry3::new(PhysicsVector3::new(0.0, 0.0, 0.0), na::zero()),
+            PhysicsMaterial::default(),
+        );
 
         world
             .create_entity()
@@ -246,13 +262,14 @@ impl SimpleState for ExampleState {
         data.world.register::<PhysicsBody>();
         let mut physics_world = MyWorld::default();
         self.create_light(data.world);
-        self.create_floor(data.world);
+        self.create_floor(data.world, &mut physics_world);
         self.prepare_cubes(data.world);
         let mut cube_names = HashMap::with_capacity(5);
         for i in 0..5 {
             self.create_cube(data.world, i, &mut physics_world, &mut cube_names);
         }
         physics_world.step();
+        physics_world.set_gravity(-PhysicsVector3::y() * 9.81);
         self.create_camera(data.world);
         self.create_center(data.world);
         data.world.add_resource(physics_world);
@@ -313,6 +330,33 @@ impl<'s> System<'s> for PointingSystem {
     }
 }
 
+#[derive(Default)]
+pub struct PhysicsSystem;
+
+impl<'s> System<'s> for PhysicsSystem {
+    type SystemData = (
+        Write<'s, MyWorld>,
+        WriteStorage<'s, Transform>,
+        ReadStorage<'s, PhysicsBody>,
+    );
+    fn run(&mut self, (mut physics_world, mut transforms, bodies): Self::SystemData) {
+        physics_world.step();
+        for (mut t, body) in (&mut transforms, &bodies).join() {
+            if let Some(pos) = physics_world
+                .collision_world()
+                .collision_object(body.0)
+                .map(|co| co.position())
+            {
+                *t.translation_mut() = Vector3::new(
+                    pos.translation.vector.x,
+                    pos.translation.vector.y,
+                    pos.translation.vector.z,
+                );
+            }
+        }
+    }
+}
+
 fn main() -> amethyst::Result<()> {
     amethyst::start_logger(Default::default());
 
@@ -351,6 +395,11 @@ fn main() -> amethyst::Result<()> {
             PointingSystem::default(),
             "pointing_system",
             &["fly_movement"],
+        )
+        .with(
+            PhysicsSystem::default(),
+            "physics_system",
+            &["pointing_system"],
         );
     let mut game = Application::new("./", ExampleState::default(), game_data)?;
 
