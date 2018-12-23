@@ -154,7 +154,7 @@ impl ExampleState {
         *t.scale_mut() = Vector3::new(0.5, 0.5, 0.5);
         *t.translation_mut() = Vector3::new(
             (i as f32) * 3.0 - 7.5,
-            (i as f32) * 3.0 + 100.5,
+            (i as f32) * 3.0 + 2.5,
             3.0 + (-1.0_f32).powf(i as f32) * 0.5,
         );
 
