@@ -2,6 +2,7 @@ extern crate amethyst;
 extern crate nalgebra as na;
 extern crate ncollide3d;
 extern crate nphysics3d;
+// extern crate nphysics_testbed3d;
 extern crate specs;
 
 use std::{
@@ -272,6 +273,11 @@ impl SimpleState for ExampleState {
         physics_world.set_gravity(-PhysicsVector3::y() * 9.81);
         self.create_camera(data.world);
         self.create_center(data.world);
+
+        // let mut testbed = nphysics_testbed3d::Testbed::new(physics_world.inner);
+        // testbed.look_at(Point3::new(-4.0, 1.0, -4.0), Point3::new(0.0, 1.0, 0.0));
+        // testbed.run();
+
         data.world.add_resource(physics_world);
         data.world.add_resource(cube_names);
     }
