@@ -284,7 +284,9 @@ impl SimpleState for ExampleState {
 }
 
 #[derive(Default)]
-pub struct PointingSystem;
+pub struct PointingSystem {
+    pointed_cube: Option<CubeName>,
+}
 
 impl<'s> System<'s> for PointingSystem {
     type SystemData = (
@@ -292,11 +294,10 @@ impl<'s> System<'s> for PointingSystem {
         Read<'s, MyWorld>,
         ReadStorage<'s, Transform>,
         Read<'s, HashMap<ColliderHandle, CubeName>>,
-        Write<'s, Option<CubeName>>,
     );
     fn run(
         &mut self,
-        (cameras, physics_world, transforms, cube_names, mut cube_name): Self::SystemData,
+        (cameras, physics_world, transforms, cube_names): Self::SystemData,
     ) {
         let mut rotation = None;
         let mut translation = None;
@@ -326,8 +327,8 @@ impl<'s> System<'s> for PointingSystem {
             })
             .and_then(|(col, _)| cube_names.get(&col.handle()));
 
-        if current_cube_name != cube_name.as_ref() {
-            *cube_name = current_cube_name.map(|x| x.clone());
+        if current_cube_name != self.pointed_cube.as_ref() {
+            self.pointed_cube = current_cube_name.map(|x| x.clone());
             println!(
                 "watching {}",
                 current_cube_name.map(|x| &*x.0).unwrap_or("no cube")
