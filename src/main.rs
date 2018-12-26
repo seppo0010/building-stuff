@@ -167,7 +167,7 @@ impl ExampleState {
                 let translation = t.translation();
                 PhysicsVector3::new(translation[0], translation[1], translation[2])
             },
-            na::zero(),
+            Vector3::new(0.9, 0.1, 0.0)
         );
         let handle = physics_world.add_rigid_body(pos, inertia, center_of_mass);
 
@@ -353,11 +353,8 @@ impl<'s> System<'s> for PhysicsSystem {
                 .collision_object(body.0)
                 .map(|co| co.position())
             {
-                *t.translation_mut() = Vector3::new(
-                    pos.translation.vector.x,
-                    pos.translation.vector.y,
-                    pos.translation.vector.z,
-                );
+                *t.translation_mut() = pos.translation.vector;
+                *t.rotation_mut() = pos.rotation;
             }
         }
     }
