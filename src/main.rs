@@ -7,7 +7,6 @@ extern crate specs;
 
 use std::{
     cmp::Ordering,
-    collections::HashMap,
     ops::{Deref, DerefMut},
 };
 
@@ -20,12 +19,12 @@ use amethyst::{
         Transform,
     },
     ecs::{Component, Join, Read, ReadStorage, System, VecStorage, Write, WriteStorage},
-    input::InputBundle,
+    input::{InputBundle, InputHandler},
     prelude::*,
     renderer::{
         AmbientColor, Camera, DirectionalLight, DisplayConfig, DrawShaded, Light, Material,
-        MaterialDefaults, MeshHandle, Pipeline, PosNormTex, Projection, RenderBundle, Rgba, Shape,
-        Stage,
+        MaterialDefaults, MeshHandle, MouseButton, Pipeline, PosNormTex, Projection, RenderBundle,
+        Rgba, Shape, Stage,
     },
     ui::{DrawUi, UiBundle, UiCreator},
     utils::application_root_dir,
@@ -39,10 +38,11 @@ use ncollide3d::{
     world::{CollisionGroups, CollisionObjectHandle},
 };
 use nphysics3d::{
-    object::{BodyHandle, ColliderHandle, Material as PhysicsMaterial},
+    object::{BodyHandle, Material as PhysicsMaterial},
     volumetric::Volumetric,
     world::World as PhysicsWorld,
 };
+use specs::{Entities, Entity};
 
 const COLLIDER_MARGIN: f32 = 0.01;
 
@@ -73,12 +73,6 @@ impl DerefMut for MyWorld {
     }
 }
 
-#[derive(Clone, PartialEq)]
-pub struct CubeName(String);
-impl Component for CubeName {
-    type Storage = VecStorage<Self>;
-}
-
 pub struct PhysicsBody(CollisionObjectHandle);
 impl Component for PhysicsBody {
     type Storage = VecStorage<Self>;
@@ -88,7 +82,6 @@ impl Component for PhysicsBody {
 struct ExampleState {
     cube_mesh: Option<MeshHandle>,
     cube_materials: Vec<Material>,
-    cube_names: Vec<String>,
 }
 
 impl ExampleState {
@@ -126,16 +119,15 @@ impl ExampleState {
         let mesh_data = Shape::Cube.generate::<Vec<PosNormTex>>(None);
         self.cube_mesh =
             Some(loader.load_from_data(mesh_data.into(), &mut progress, &mesh_storage));
-        for (color, name) in [
-            ([0.0, 1.0, 0.0, 1.0], "green"),
-            ([1.0, 1.0, 0.0, 1.0], "yellow"),
-            ([1.0, 0.0, 0.0, 1.0], "red"),
-            ([1.0, 0.0, 1.0, 1.0], "pink"),
-            ([0.0, 0.0, 1.0, 1.0], "blue"),
+        for color in [
+            [0.0, 1.0, 0.0, 1.0],
+            [1.0, 1.0, 0.0, 1.0],
+            [1.0, 0.0, 0.0, 1.0],
+            [1.0, 0.0, 1.0, 1.0],
+            [0.0, 0.0, 1.0, 1.0],
         ]
         .into_iter()
         {
-            self.cube_names.push(name.to_string());
             self.cube_materials.push(Material {
                 albedo: loader.load_from_data((*color).into(), &mut progress, &tex_storage),
                 ..world.read_resource::<MaterialDefaults>().0.clone()
@@ -143,13 +135,7 @@ impl ExampleState {
         }
     }
 
-    fn create_cube(
-        &mut self,
-        world: &mut World,
-        i: usize,
-        physics_world: &mut MyWorld,
-        cube_names: &mut HashMap<ColliderHandle, CubeName>,
-    ) {
+    fn create_cube(&mut self, world: &mut World, i: usize, physics_world: &mut MyWorld) {
         let mut t = Transform::default();
         *t.scale_mut() = Vector3::new(0.5, 0.5, 0.5);
         *t.translation_mut() = Vector3::new(
@@ -167,7 +153,7 @@ impl ExampleState {
                 let translation = t.translation();
                 PhysicsVector3::new(translation[0], translation[1], translation[2])
             },
-            Vector3::new(0.9, 0.1, 0.0)
+            Vector3::new(0.9, 0.1, 0.0),
         );
         let handle = physics_world.add_rigid_body(pos, inertia, center_of_mass);
 
@@ -178,7 +164,6 @@ impl ExampleState {
             Isometry3::identity(),
             PhysicsMaterial::default(),
         );
-        cube_names.insert(body_handle, CubeName(self.cube_names[i].clone()));
 
         world
             .create_entity()
@@ -265,9 +250,8 @@ impl SimpleState for ExampleState {
         self.create_light(data.world);
         self.create_floor(data.world, &mut physics_world);
         self.prepare_cubes(data.world);
-        let mut cube_names = HashMap::with_capacity(5);
         for i in 0..5 {
-            self.create_cube(data.world, i, &mut physics_world, &mut cube_names);
+            self.create_cube(data.world, i, &mut physics_world);
         }
         physics_world.step();
         physics_world.set_gravity(-PhysicsVector3::y() * 9.81);
@@ -279,50 +263,45 @@ impl SimpleState for ExampleState {
         // testbed.run();
 
         data.world.add_resource(physics_world);
-        data.world.add_resource(cube_names);
     }
+}
+
+struct SelectedObject {
+    entity: Entity,
+    initial_position: Isometry3<f32>,
+    initial_camera_position: Isometry3<f32>,
 }
 
 #[derive(Default)]
 pub struct PointingSystem {
-    selected_cube: Option<CubeName>,
-    was_left_click: bool,
+    selected_object: Option<SelectedObject>,
 }
 
 impl PointingSystem {
-    fn find_pointed_cube(cameras: ReadStorage<Camera>, physics_world: Read<MyWorld>, transforms: ReadStorage<Transform>) -> Option<specs::Entity> {
-        None
-    }
-}
-
-impl<'s> System<'s> for PointingSystem {
-    type SystemData = (
-        ReadStorage<'s, Camera>,
-        Read<'s, MyWorld>,
-        ReadStorage<'s, Transform>,
-        Read<'s, HashMap<ColliderHandle, CubeName>>,
-    );
-    fn run(
-        &mut self,
-        (cameras, physics_world, transforms, cube_names): Self::SystemData,
-    ) {
-        let mut rotation = None;
-        let mut translation = None;
-        for (_, transform) in (&cameras, &transforms).join() {
-            rotation = Some(transform.rotation().clone());
-            translation = Some(transform.translation().clone());
-        }
-        let (rotation, translation) = match (rotation, translation) {
-            (Some(r), Some(t)) => (r, t),
-            (_, _) => return,
-        };
-        let r = rotation * Vector3::new(0.0, 0.0, 1.0);
-        let ray = Ray::new(
-            Point3::new(translation.x, translation.y, translation.z),
+    fn find_current_ray(
+        &self,
+        cameras: &ReadStorage<Camera>,
+        transforms: &ReadStorage<Transform>,
+    ) -> (Ray<f32>, Isometry3<f32>) {
+        let isometry = (cameras, transforms).join().next().unwrap().1.isometry();
+        let r = isometry.rotation * Vector3::new(0.0, 0.0, 1.0);
+        (Ray::new(
+            Point3::new(isometry.translation.vector.x, isometry.translation.vector.y, isometry.translation.vector.z),
             PhysicsVector3::new(-r.x, -r.y, -r.z),
-        );
+        ), *isometry)
+    }
+
+    fn find_pointed_object(
+        &self,
+        ray: &Ray<f32>,
+        entities: &Entities,
+        physics_world: &Read<MyWorld>,
+        physics_bodies: &ReadStorage<PhysicsBody>,
+        transforms: &ReadStorage<Transform>,
+    ) -> Option<(Entity, Isometry3<f32>)> {
         let all_groups = &CollisionGroups::new();
-        let current_cube_name = physics_world
+
+        let handle = physics_world
             .collision_world()
             .interferences_with_ray(&ray, all_groups)
             .into_iter()
@@ -332,17 +311,68 @@ impl<'s> System<'s> for PointingSystem {
                     .partial_cmp(&inter2.toi)
                     .unwrap_or(Ordering::Equal)
             })
-            .and_then(|(col, _)| cube_names.get(&col.handle()));
+            .map(|(col, _)| col.handle());
 
-        /*
-        if current_cube_name != self.pointed_cube.as_ref() {
-            self.pointed_cube = current_cube_name.map(|x| x.clone());
-            println!(
-                "watching {}",
-                current_cube_name.map(|x| &*x.0).unwrap_or("no cube")
-            );
+        (entities, physics_bodies, transforms)
+            .join()
+            .filter(|(_, b, _)| Some(b.0) == handle)
+            .next()
+            .map(|(e, _, t)| (e, *t.isometry()))
+    }
+
+    fn move_selected_object(&self) {}
+
+    fn grab_object(
+        &mut self,
+        entities: Entities,
+        cameras: ReadStorage<Camera>,
+        physics_world: Read<MyWorld>,
+        transforms: ReadStorage<Transform>,
+        physics_bodies: ReadStorage<PhysicsBody>,
+    ) {
+        let (ray, camera_isometry) = self.find_current_ray(&cameras, &transforms);
+
+
+        self.selected_object = self.find_pointed_object(
+            &ray,
+            &entities,
+            &physics_world,
+            &physics_bodies,
+            &transforms,
+        ).map(|(entity, isometry)| SelectedObject {
+            entity: entity,
+            initial_position: isometry,
+            initial_camera_position: camera_isometry,
+        })
+    }
+
+    fn drop_object(&mut self) {
+        self.selected_object = None;
+    }
+}
+
+impl<'s> System<'s> for PointingSystem {
+    type SystemData = (
+        Entities<'s>,
+        ReadStorage<'s, Camera>,
+        Read<'s, MyWorld>,
+        ReadStorage<'s, Transform>,
+        ReadStorage<'s, PhysicsBody>,
+        Read<'s, InputHandler<String, String>>,
+    );
+    fn run(
+        &mut self,
+        (entities, cameras, physics_world, transforms, physics_bodies, input): Self::SystemData,
+    ) {
+        let is_left_click = input.mouse_button_is_down(MouseButton::Left);
+        match (is_left_click, self.selected_object.is_some()) {
+            (true, true) => self.move_selected_object(),
+            (true, false) => {
+                self.grab_object(entities, cameras, physics_world, transforms, physics_bodies)
+            }
+            (false, true) => self.drop_object(),
+            (false, false) => (),
         }
-        */
     }
 }
 
