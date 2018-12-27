@@ -38,6 +38,7 @@ use ncollide3d::{
     world::{CollisionGroups, CollisionObjectHandle},
 };
 use nphysics3d::{
+    algebra::Velocity3,
     object::{BodyHandle, Material as PhysicsMaterial},
     volumetric::Volumetric,
     world::World as PhysicsWorld,
@@ -268,8 +269,7 @@ impl SimpleState for ExampleState {
 
 struct SelectedObject {
     entity: Entity,
-    initial_position: Isometry3<f32>,
-    initial_camera_position: Isometry3<f32>,
+    previous_camera_position: Isometry3<f32>,
 }
 
 #[derive(Default)]
@@ -285,20 +285,26 @@ impl PointingSystem {
     ) -> (Ray<f32>, Isometry3<f32>) {
         let isometry = (cameras, transforms).join().next().unwrap().1.isometry();
         let r = isometry.rotation * Vector3::new(0.0, 0.0, 1.0);
-        (Ray::new(
-            Point3::new(isometry.translation.vector.x, isometry.translation.vector.y, isometry.translation.vector.z),
-            PhysicsVector3::new(-r.x, -r.y, -r.z),
-        ), *isometry)
+        (
+            Ray::new(
+                Point3::new(
+                    isometry.translation.vector.x,
+                    isometry.translation.vector.y,
+                    isometry.translation.vector.z,
+                ),
+                PhysicsVector3::new(-r.x, -r.y, -r.z),
+            ),
+            *isometry,
+        )
     }
 
     fn find_pointed_object(
         &self,
         ray: &Ray<f32>,
         entities: &Entities,
-        physics_world: &Read<MyWorld>,
-        physics_bodies: &ReadStorage<PhysicsBody>,
-        transforms: &ReadStorage<Transform>,
-    ) -> Option<(Entity, Isometry3<f32>)> {
+        physics_world: &Write<MyWorld>,
+        physics_bodies: &WriteStorage<PhysicsBody>,
+    ) -> Option<Entity> {
         let all_groups = &CollisionGroups::new();
 
         let handle = physics_world
@@ -313,37 +319,56 @@ impl PointingSystem {
             })
             .map(|(col, _)| col.handle());
 
-        (entities, physics_bodies, transforms)
+        (entities, physics_bodies)
             .join()
-            .filter(|(_, b, _)| Some(b.0) == handle)
+            .filter(|(_, b)| Some(b.0) == handle)
             .next()
-            .map(|(e, _, t)| (e, *t.isometry()))
+            .map(|(e, _)| e)
     }
 
-    fn move_selected_object(&self) {}
+    fn move_selected_object(
+        &mut self,
+        cameras: &ReadStorage<Camera>,
+        transforms: &ReadStorage<Transform>,
+        physics_bodies: &WriteStorage<PhysicsBody>,
+        world: &mut Write<MyWorld>,
+    ) {
+        let camera_isometry = self.find_current_ray(cameras, transforms).1;
+        let so = match self.selected_object.as_mut() {
+            Some(x) => x,
+            None => return,
+        };
+        let body = match physics_bodies.get(so.entity) {
+            Some(x) => x,
+            None => return,
+        };
+        let linear =
+            camera_isometry.translation.vector - so.previous_camera_position.translation.vector;
+        let bh = match world.collider_body_handle(body.0) {
+            Some(x) => x,
+            None => return,
+        };
+        let rb = world.rigid_body_mut(bh).unwrap();
+        rb.apply_displacement(&Velocity3::new(linear, Vector3::new(0.0, 0.0, 0.0)));
+        so.previous_camera_position = camera_isometry;
+    }
 
     fn grab_object(
         &mut self,
-        entities: Entities,
-        cameras: ReadStorage<Camera>,
-        physics_world: Read<MyWorld>,
-        transforms: ReadStorage<Transform>,
-        physics_bodies: ReadStorage<PhysicsBody>,
+        entities: &Entities,
+        cameras: &ReadStorage<Camera>,
+        physics_world: &Write<MyWorld>,
+        transforms: &ReadStorage<Transform>,
+        physics_bodies: &WriteStorage<PhysicsBody>,
     ) {
         let (ray, camera_isometry) = self.find_current_ray(&cameras, &transforms);
 
-
-        self.selected_object = self.find_pointed_object(
-            &ray,
-            &entities,
-            &physics_world,
-            &physics_bodies,
-            &transforms,
-        ).map(|(entity, isometry)| SelectedObject {
-            entity: entity,
-            initial_position: isometry,
-            initial_camera_position: camera_isometry,
-        })
+        self.selected_object = self
+            .find_pointed_object(&ray, entities, &physics_world, physics_bodies)
+            .map(|entity| SelectedObject {
+                entity: entity,
+                previous_camera_position: camera_isometry,
+            });
     }
 
     fn drop_object(&mut self) {
@@ -355,21 +380,30 @@ impl<'s> System<'s> for PointingSystem {
     type SystemData = (
         Entities<'s>,
         ReadStorage<'s, Camera>,
-        Read<'s, MyWorld>,
+        Write<'s, MyWorld>,
         ReadStorage<'s, Transform>,
-        ReadStorage<'s, PhysicsBody>,
+        WriteStorage<'s, PhysicsBody>,
         Read<'s, InputHandler<String, String>>,
     );
     fn run(
         &mut self,
-        (entities, cameras, physics_world, transforms, physics_bodies, input): Self::SystemData,
+        (entities, cameras, mut physics_world, transforms, physics_bodies, input): Self::SystemData,
     ) {
         let is_left_click = input.mouse_button_is_down(MouseButton::Left);
         match (is_left_click, self.selected_object.is_some()) {
-            (true, true) => self.move_selected_object(),
-            (true, false) => {
-                self.grab_object(entities, cameras, physics_world, transforms, physics_bodies)
-            }
+            (true, true) => self.move_selected_object(
+                &cameras,
+                &transforms,
+                &physics_bodies,
+                &mut physics_world,
+            ),
+            (true, false) => self.grab_object(
+                &entities,
+                &cameras,
+                &physics_world,
+                &transforms,
+                &physics_bodies,
+            ),
             (false, true) => self.drop_object(),
             (false, false) => (),
         }
