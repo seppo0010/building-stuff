@@ -285,7 +285,14 @@ impl SimpleState for ExampleState {
 
 #[derive(Default)]
 pub struct PointingSystem {
-    pointed_cube: Option<CubeName>,
+    selected_cube: Option<CubeName>,
+    was_left_click: bool,
+}
+
+impl PointingSystem {
+    fn find_pointed_cube(cameras: ReadStorage<Camera>, physics_world: Read<MyWorld>, transforms: ReadStorage<Transform>) -> Option<specs::Entity> {
+        None
+    }
 }
 
 impl<'s> System<'s> for PointingSystem {
@@ -327,6 +334,7 @@ impl<'s> System<'s> for PointingSystem {
             })
             .and_then(|(col, _)| cube_names.get(&col.handle()));
 
+        /*
         if current_cube_name != self.pointed_cube.as_ref() {
             self.pointed_cube = current_cube_name.map(|x| x.clone());
             println!(
@@ -334,6 +342,7 @@ impl<'s> System<'s> for PointingSystem {
                 current_cube_name.map(|x| &*x.0).unwrap_or("no cube")
             );
         }
+        */
     }
 }
 
