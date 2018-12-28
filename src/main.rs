@@ -38,7 +38,7 @@ use ncollide3d::{
     world::{CollisionGroups, CollisionObjectHandle},
 };
 use nphysics3d::{
-    object::{BodyHandle, Material as PhysicsMaterial},
+    object::{BodyHandle, Material as PhysicsMaterial, RigidBody},
     volumetric::Volumetric,
     world::World as PhysicsWorld,
 };
@@ -326,6 +326,18 @@ impl PointingSystem {
             .map(|(e, _)| e)
     }
 
+    fn get_selected_object_rigid_body_mut<'a>(
+        &mut self,
+        physics_bodies: &WriteStorage<PhysicsBody>,
+        world: &'a mut Write<MyWorld>,
+    ) -> Option<&'a mut RigidBody<f32>> {
+        self.selected_object
+            .as_mut()
+            .and_then(|so| physics_bodies.get(so.entity))
+            .and_then(|body| world.collider_body_handle(body.0))
+            .and_then(move |bh| world.rigid_body_mut(bh))
+    }
+
     fn move_selected_object(
         &mut self,
         cameras: &ReadStorage<Camera>,
@@ -334,23 +346,23 @@ impl PointingSystem {
         world: &mut Write<MyWorld>,
     ) {
         let camera_isometry = self.find_current_ray(cameras, transforms).1;
-        let so = match self.selected_object.as_mut() {
+        let rb = match self.get_selected_object_rigid_body_mut(physics_bodies, world) {
             Some(x) => x,
             None => return,
         };
-        let body = match physics_bodies.get(so.entity) {
-            Some(x) => x,
-            None => return,
-        };
-        let linear =
-            camera_isometry.translation.vector - so.previous_camera_position.translation.vector;
-        let bh = match world.collider_body_handle(body.0) {
-            Some(x) => x,
-            None => return,
-        };
-        let rb = world.rigid_body_mut(bh).unwrap();
+        let linear = camera_isometry.translation.vector
+            - self
+                .selected_object
+                .as_ref()
+                .unwrap()
+                .previous_camera_position
+                .translation
+                .vector;
         rb.set_linear_velocity(linear * MAGIC_SPEED_MULTIPLIER);
-        so.previous_camera_position = camera_isometry;
+        self.selected_object
+            .as_mut()
+            .unwrap()
+            .previous_camera_position = camera_isometry;
     }
 
     fn grab_object(
