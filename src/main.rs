@@ -46,7 +46,8 @@ use nphysics3d::{
 use specs::{Entities, Entity};
 
 const COLLIDER_MARGIN: f32 = 0.01;
-const MAGIC_SPEED_MULTIPLIER: f32 = 65.5;
+const MAGIC_LINEAR_SPEED_MULTIPLIER: f32 = 65.5;
+const MAGIC_ANGULAR_VELOCITY_MULTIPLIER: f32 = 50.0;
 
 type MyCollisionWorld = PhysicsWorld<f32>;
 pub struct MyWorld {
@@ -273,6 +274,8 @@ struct SelectedObject {
     previous_camera_position: Isometry3<f32>,
     force: ForceGeneratorHandle,
     distance: f32,
+    box_forward: Vector3<f32>,
+    box_up: Vector3<f32>,
 }
 
 #[derive(Default)]
@@ -359,7 +362,12 @@ impl PointingSystem {
             + (so.previous_camera_position.rotation * Vector3::new(0.0, 0.0, 1.0)
                 - camera_isometry.rotation * Vector3::new(0.0, 0.0, 1.0))
                 * so.distance;
-        rb.set_linear_velocity(linear * MAGIC_SPEED_MULTIPLIER);
+        let angular = (rb.position().rotation * so.box_forward)
+            .cross(&(camera_isometry.rotation * Vector3::z()))
+            + (rb.position().rotation * so.box_up)
+                .cross(&(camera_isometry.rotation * Vector3::y()));
+        rb.set_linear_velocity(linear * MAGIC_LINEAR_SPEED_MULTIPLIER);
+        rb.set_angular_velocity(angular * MAGIC_ANGULAR_VELOCITY_MULTIPLIER);
         so.previous_camera_position = camera_isometry;
     }
 
@@ -389,11 +397,25 @@ impl PointingSystem {
                 );
                 (entity, physics_world.add_force_generator(f), toi)
             })
-            .map(|(entity, antig, toi)| SelectedObject {
-                entity: entity,
-                previous_camera_position: camera_isometry,
-                force: antig,
-                distance: toi,
+            .map(|(entity, antig, toi)| {
+                let rot_inv = physics_world
+                    .rigid_body(
+                        physics_world
+                            .collider_body_handle(physics_bodies.get(entity).unwrap().0)
+                            .unwrap(),
+                    )
+                    .unwrap()
+                    .position()
+                    .rotation
+                    .inverse();
+                SelectedObject {
+                    entity: entity,
+                    previous_camera_position: camera_isometry,
+                    force: antig,
+                    distance: toi,
+                    box_forward: rot_inv * (camera_isometry.rotation * Vector3::z()),
+                    box_up: rot_inv * (camera_isometry.rotation * Vector3::y()),
+                }
             });
     }
 
