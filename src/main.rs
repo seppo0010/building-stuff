@@ -272,6 +272,7 @@ struct SelectedObject {
     entity: Entity,
     previous_camera_position: Isometry3<f32>,
     force: ForceGeneratorHandle,
+    distance: f32,
 }
 
 #[derive(Default)]
@@ -306,7 +307,7 @@ impl PointingSystem {
         entities: &Entities,
         physics_world: &Write<MyWorld>,
         physics_bodies: &WriteStorage<PhysicsBody>,
-    ) -> Option<Entity> {
+    ) -> Option<(Entity, f32)> {
         let all_groups = &CollisionGroups::new();
 
         let handle = physics_world
@@ -319,13 +320,13 @@ impl PointingSystem {
                     .partial_cmp(&inter2.toi)
                     .unwrap_or(Ordering::Equal)
             })
-            .map(|(col, _)| col.handle());
+            .map(|(col, inter)| (col.handle(), inter.toi));
 
         (entities, physics_bodies)
             .join()
-            .filter(|(_, b)| Some(b.0) == handle)
+            .filter(|(_, b)| Some(b.0) == handle.map(|x| x.0))
             .next()
-            .map(|(e, _)| e)
+            .map(|(e, _)| (e, handle.unwrap().1))
     }
 
     fn get_selected_object_rigid_body_mut<'a>(
@@ -352,19 +353,14 @@ impl PointingSystem {
             Some(x) => x,
             None => return,
         };
+        let so = self.selected_object.as_mut().unwrap();
         let linear = camera_isometry.translation.vector
-            - self
-                .selected_object
-                .as_ref()
-                .unwrap()
-                .previous_camera_position
-                .translation
-                .vector;
+            - so.previous_camera_position.translation.vector
+            + (so.previous_camera_position.rotation * Vector3::new(0.0, 0.0, 1.0)
+                - camera_isometry.rotation * Vector3::new(0.0, 0.0, 1.0))
+                * so.distance;
         rb.set_linear_velocity(linear * MAGIC_SPEED_MULTIPLIER);
-        self.selected_object
-            .as_mut()
-            .unwrap()
-            .previous_camera_position = camera_isometry;
+        so.previous_camera_position = camera_isometry;
     }
 
     fn grab_object(
@@ -379,7 +375,7 @@ impl PointingSystem {
 
         self.selected_object = self
             .find_pointed_object(&ray, entities, &physics_world, physics_bodies)
-            .map(|entity| {
+            .map(|(entity, toi)| {
                 let mut f = ConstantAcceleration::new(
                     -physics_world.gravity(),
                     Vector3::new(0.0, 0.0, 0.0),
@@ -390,12 +386,13 @@ impl PointingSystem {
                         .collider_body_handle(physics_bodies.get(entity).unwrap().0)
                         .unwrap(),
                 );
-                (entity, physics_world.add_force_generator(f))
+                (entity, physics_world.add_force_generator(f), toi)
             })
-            .map(|(entity, antig)| SelectedObject {
+            .map(|(entity, antig, toi)| SelectedObject {
                 entity: entity,
                 previous_camera_position: camera_isometry,
                 force: antig,
+                distance: toi,
             });
     }
 
