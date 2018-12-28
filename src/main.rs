@@ -38,7 +38,6 @@ use ncollide3d::{
     world::{CollisionGroups, CollisionObjectHandle},
 };
 use nphysics3d::{
-    algebra::Velocity3,
     object::{BodyHandle, Material as PhysicsMaterial},
     volumetric::Volumetric,
     world::World as PhysicsWorld,
@@ -46,6 +45,7 @@ use nphysics3d::{
 use specs::{Entities, Entity};
 
 const COLLIDER_MARGIN: f32 = 0.01;
+const MAGIC_SPEED_MULTIPLIER: f32 = 65.5;
 
 type MyCollisionWorld = PhysicsWorld<f32>;
 pub struct MyWorld {
@@ -349,7 +349,7 @@ impl PointingSystem {
             None => return,
         };
         let rb = world.rigid_body_mut(bh).unwrap();
-        rb.apply_displacement(&Velocity3::new(linear, Vector3::new(0.0, 0.0, 0.0)));
+        rb.set_linear_velocity(linear * MAGIC_SPEED_MULTIPLIER);
         so.previous_camera_position = camera_isometry;
     }
 
@@ -423,8 +423,8 @@ impl<'s> System<'s> for PhysicsSystem {
         physics_world.step();
         for (mut t, body) in (&mut transforms, &bodies).join() {
             if let Some(pos) = physics_world
-                .collision_world()
-                .collision_object(body.0)
+                .collider_body_handle(body.0)
+                .and_then(|bh| physics_world.rigid_body(bh))
                 .map(|co| co.position())
             {
                 *t.translation_mut() = pos.translation.vector;
