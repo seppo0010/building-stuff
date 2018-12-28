@@ -375,6 +375,7 @@ impl PointingSystem {
 
         self.selected_object = self
             .find_pointed_object(&ray, entities, &physics_world, physics_bodies)
+            .filter(|(_, toi)| *toi < 4.0)
             .map(|(entity, toi)| {
                 let mut f = ConstantAcceleration::new(
                     -physics_world.gravity(),
