@@ -38,6 +38,7 @@ use ncollide3d::{
     world::{CollisionGroups, CollisionObjectHandle},
 };
 use nphysics3d::{
+    force_generator::{ConstantAcceleration, ForceGeneratorHandle},
     object::{BodyHandle, Material as PhysicsMaterial, RigidBody},
     volumetric::Volumetric,
     world::World as PhysicsWorld,
@@ -270,6 +271,7 @@ impl SimpleState for ExampleState {
 struct SelectedObject {
     entity: Entity,
     previous_camera_position: Isometry3<f32>,
+    force: ForceGeneratorHandle,
 }
 
 #[derive(Default)]
@@ -369,7 +371,7 @@ impl PointingSystem {
         &mut self,
         entities: &Entities,
         cameras: &ReadStorage<Camera>,
-        physics_world: &Write<MyWorld>,
+        physics_world: &mut Write<MyWorld>,
         transforms: &ReadStorage<Transform>,
         physics_bodies: &WriteStorage<PhysicsBody>,
     ) {
@@ -377,13 +379,30 @@ impl PointingSystem {
 
         self.selected_object = self
             .find_pointed_object(&ray, entities, &physics_world, physics_bodies)
-            .map(|entity| SelectedObject {
+            .map(|entity| {
+                let mut f = ConstantAcceleration::new(
+                    -physics_world.gravity(),
+                    Vector3::new(0.0, 0.0, 0.0),
+                );
+                // this is awful
+                f.add_body_part(
+                    physics_world
+                        .collider_body_handle(physics_bodies.get(entity).unwrap().0)
+                        .unwrap(),
+                );
+                (entity, physics_world.add_force_generator(f))
+            })
+            .map(|(entity, antig)| SelectedObject {
                 entity: entity,
                 previous_camera_position: camera_isometry,
+                force: antig,
             });
     }
 
-    fn drop_object(&mut self) {
+    fn drop_object(&mut self, physics_world: &mut Write<MyWorld>) {
+        if let Some(ref so) = self.selected_object {
+            physics_world.remove_force_generator(so.force);
+        }
         self.selected_object = None;
     }
 }
@@ -412,11 +431,11 @@ impl<'s> System<'s> for PointingSystem {
             (true, false) => self.grab_object(
                 &entities,
                 &cameras,
-                &physics_world,
+                &mut physics_world,
                 &transforms,
                 &physics_bodies,
             ),
-            (false, true) => self.drop_object(),
+            (false, true) => self.drop_object(&mut physics_world),
             (false, false) => (),
         }
     }
