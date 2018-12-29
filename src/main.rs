@@ -46,7 +46,7 @@ use nphysics3d::{
 use specs::{Entities, Entity};
 
 const COLLIDER_MARGIN: f32 = 0.01;
-const MAGIC_LINEAR_SPEED_MULTIPLIER: f32 = 65.5;
+const MAGIC_LINEAR_SPEED_MULTIPLIER: f32 = 60.0;
 const MAGIC_ANGULAR_VELOCITY_MULTIPLIER: f32 = 50.0;
 
 type MyCollisionWorld = PhysicsWorld<f32>;
