@@ -7,6 +7,7 @@ extern crate specs;
 
 use std::{
     cmp::Ordering,
+    f32,
     ops::{Deref, DerefMut},
 };
 
@@ -120,8 +121,7 @@ impl ExampleState {
         let mut progress = ProgressCounter::default();
         let loader = world.read_resource::<Loader>();
         let mesh_data = Shape::Cube.generate::<Vec<PosNormTex>>(None);
-        self.cube_mesh =
-            Some(loader.load_from_data(mesh_data.into(), &mut progress, &mesh_storage));
+        self.cube_mesh = Some(loader.load_from_data(mesh_data, &mut progress, &mesh_storage));
         for color in [
             [0.0, 1.0, 0.0, 1.0],
             [1.0, 1.0, 0.0, 1.0],
@@ -190,8 +190,7 @@ impl ExampleState {
             let mut progress = ProgressCounter::default();
             let loader = world.read_resource::<Loader>();
             let mesh_data = Shape::Cube.generate::<Vec<PosNormTex>>(None);
-            let plane: MeshHandle =
-                loader.load_from_data(mesh_data.into(), &mut progress, &mesh_storage);
+            let plane: MeshHandle = loader.load_from_data(mesh_data, &mut progress, &mesh_storage);
             let color = Material {
                 albedo: loader.load_from_data(
                     [135.0 / 255.0, 67.0 / 255.0, 23.0 / 255.0, 1.0].into(),
@@ -229,7 +228,7 @@ impl ExampleState {
             &Vector3::new(0.0, 0.0, -1.0),
             &Vector3::new(0.0, 1.0, 0.0),
         );
-        let c = Camera::from(Projection::perspective(1.3, 1.0471975512));
+        let c = Camera::from(Projection::perspective(1.3, f32::consts::FRAC_PI_3));
         world
             .create_entity()
             .named("camera")
@@ -316,7 +315,6 @@ impl PointingSystem {
         let handle = physics_world
             .collision_world()
             .interferences_with_ray(&ray, all_groups)
-            .into_iter()
             .min_by(|(_, inter1), (_, inter2)| {
                 inter1
                     .toi
@@ -327,8 +325,7 @@ impl PointingSystem {
 
         (entities, physics_bodies)
             .join()
-            .filter(|(_, b)| Some(b.0) == handle.map(|x| x.0))
-            .next()
+            .find(|(_, b)| Some(b.0) == handle.map(|x| x.0))
             .map(|(e, _)| (e, handle.unwrap().1))
     }
 
@@ -409,7 +406,7 @@ impl PointingSystem {
                     .rotation
                     .inverse();
                 SelectedObject {
-                    entity: entity,
+                    entity,
                     previous_camera_position: camera_isometry,
                     force: antig,
                     distance: toi,
@@ -427,15 +424,16 @@ impl PointingSystem {
     }
 }
 
+type PointingSystemData<'s> = (
+    Entities<'s>,
+    ReadStorage<'s, Camera>,
+    Write<'s, MyWorld>,
+    ReadStorage<'s, Transform>,
+    WriteStorage<'s, PhysicsBody>,
+    Read<'s, InputHandler<String, String>>,
+);
 impl<'s> System<'s> for PointingSystem {
-    type SystemData = (
-        Entities<'s>,
-        ReadStorage<'s, Camera>,
-        Write<'s, MyWorld>,
-        ReadStorage<'s, Transform>,
-        WriteStorage<'s, PhysicsBody>,
-        Read<'s, InputHandler<String, String>>,
-    );
+    type SystemData = PointingSystemData<'s>;
     fn run(
         &mut self,
         (entities, cameras, mut physics_world, transforms, physics_bodies, input): Self::SystemData,
@@ -496,7 +494,7 @@ fn main() -> amethyst::Result<()> {
 
     let pipe = Pipeline::build().with_stage(
         Stage::with_backbuffer()
-            .clear_target([30.0 / 255.0, 144.0 / 255.0, 255.0 / 255.0, 1.0], 1.0)
+            .clear_target([30.0 / 255.0, 144.0 / 255.0, 1.0, 1.0], 1.0)
             .with_pass(DrawShaded::<PosNormTex>::new())
             .with_pass(DrawUi::new()),
     );
