@@ -4,6 +4,7 @@ extern crate ncollide3d;
 extern crate nphysics3d;
 // extern crate nphysics_testbed3d;
 extern crate specs;
+extern crate winit;
 
 use std::{
     cmp::Ordering,
@@ -13,7 +14,9 @@ use std::{
 
 use amethyst::{
     assets::{Loader, ProgressCounter},
-    controls::{FlyControlBundle, FlyControlTag},
+    controls::{CursorHideSystem, MouseFocusUpdateSystem,
+    HideCursor, WindowFocus,
+},
     core::{
         nalgebra::{UnitQuaternion, Vector3},
         transform::TransformBundle,
@@ -27,6 +30,7 @@ use amethyst::{
         MaterialDefaults, MeshHandle, MouseButton, Pipeline, PosNormTex, Projection, RenderBundle,
         Rgba, Shape, Stage,
     },
+    shrev::{EventChannel, ReaderId},
     ui::{DrawUi, UiBundle, UiCreator},
     utils::application_root_dir,
 };
@@ -44,7 +48,8 @@ use nphysics3d::{
     volumetric::Volumetric,
     world::World as PhysicsWorld,
 };
-use specs::{Entities, Entity};
+use specs::{Entities, Entity, prelude::Resources};
+use winit::{DeviceEvent, Event};
 
 const COLLIDER_MARGIN: f32 = 0.01;
 const MAGIC_LINEAR_SPEED_MULTIPLIER: f32 = 60.0;
@@ -83,12 +88,12 @@ impl Component for PhysicsBody {
 }
 
 #[derive(Default)]
-struct ExampleState {
+struct GameState {
     cube_mesh: Option<MeshHandle>,
     cube_materials: Vec<Material>,
 }
 
-impl ExampleState {
+impl GameState {
     fn create_light(&mut self, world: &mut World) {
         world.add_resource(AmbientColor(Rgba(0.3, 0.3, 0.3, 1.0)));
         for (dir, pos, color) in [
@@ -233,7 +238,6 @@ impl ExampleState {
             .create_entity()
             .named("camera")
             .with(c)
-            .with(FlyControlTag)
             .with(t)
             .build();
     }
@@ -245,7 +249,7 @@ impl ExampleState {
         });
     }
 }
-impl SimpleState for ExampleState {
+impl SimpleState for GameState {
     fn on_start(&mut self, data: StateData<GameData>) {
         data.world.register::<PhysicsBody>();
         let mut physics_world = MyWorld::default();
@@ -483,6 +487,68 @@ impl<'s> System<'s> for PhysicsSystem {
     }
 }
 
+pub struct MovementSystem {
+    sensitivity_x: f32,
+    sensitivity_y: f32,
+    speed: f32,
+    event_reader: Option<ReaderId<Event>>,
+}
+
+impl Default for MovementSystem {
+    fn default() -> Self {
+        MovementSystem {
+            sensitivity_x: 0.2,
+            sensitivity_y: 0.2,
+            speed: 1.0,
+    event_reader: None,
+        }
+    }
+}
+
+impl<'s> System<'s> for MovementSystem {
+    type SystemData = (
+        Read<'s, EventChannel<Event>>,
+        WriteStorage<'s, Transform>,
+        ReadStorage<'s, Camera>,
+        Read<'s, WindowFocus>,
+        Read<'s, HideCursor>,
+    );
+
+    fn run(&mut self, (events, mut transforms, cameras, focus, hide): Self::SystemData) {
+        let focused = focus.is_focused;
+        for event in
+            events.read(&mut self.event_reader.as_mut().expect(
+                "`MovementSystem::setup` was not called before `MovementSystem::run`",
+            ))
+        {
+            if focused && hide.hide {
+                if let Event::DeviceEvent { ref event, .. } = *event {
+                    if let DeviceEvent::MouseMotion { delta: (x, y) } = *event {
+                        for (transform, _) in (&mut transforms, &cameras).join() {
+                            transform.pitch_local((-y as f32 * self.sensitivity_y).to_radians());
+                            transform.yaw_global((-x as f32 * self.sensitivity_x).to_radians());
+                            // there's probably a better way to do this if you know trigonometry :see_no_evil:
+                            while (transform.isometry().rotation * Vector3::z()).y < -0.8 {
+                                transform.pitch_local((-1.0_f32).to_radians());
+                            }
+                            while (transform.isometry().rotation * Vector3::z()).y > 0.8 {
+                                 transform.pitch_local((1.0_f32).to_radians());
+                            }
+                        }
+                    }
+                }
+            }
+        }
+    }
+
+    fn setup(&mut self, res: &mut Resources) {
+        use amethyst::core::specs::prelude::SystemData;
+
+        Self::SystemData::setup(res);
+        self.event_reader = Some(res.fetch_mut::<EventChannel<Event>>().register_reader());
+    }
+}
+
 fn main() -> amethyst::Result<()> {
     amethyst::start_logger(Default::default());
 
@@ -501,33 +567,36 @@ fn main() -> amethyst::Result<()> {
 
     let game_data = GameDataBuilder::default()
         .with_bundle(
-            FlyControlBundle::<String, String>::new(
-                Some(String::from("move_x")),
-                Some(String::from("move_y")),
-                Some(String::from("move_z")),
-            )
-            .with_sensitivity(0.1, 0.1),
-        )?
-        .with_bundle(
             InputBundle::<String, String>::new().with_bindings_from_file(&key_bindings_path)?,
         )?
-        .with_bundle(TransformBundle::new().with_dep(&["fly_movement"]))?
+        .with(
+            MovementSystem::default(),
+            "movement_system",
+            &[],
+        )
+        .with_bundle(TransformBundle::new().with_dep(&["movement_system"]))?
         .with_bundle(UiBundle::<String, String>::new())?
         .with_bundle(
             RenderBundle::new(pipe, Some(DisplayConfig::load(&display_config_path)))
                 .with_sprite_sheet_processor(),
         )?
+ .with(
+            MouseFocusUpdateSystem::new(),
+            "mouse_focus",
+            &["movement_system"],
+)
+        .with(CursorHideSystem::new(), "cursor_hide", &["mouse_focus"])
         .with(
             PointingSystem::default(),
             "pointing_system",
-            &["fly_movement"],
+            &["movement_system"],
         )
         .with(
             PhysicsSystem::default(),
             "physics_system",
             &["pointing_system"],
         );
-    let mut game = Application::new("./", ExampleState::default(), game_data)?;
+    let mut game = Application::new("./", GameState::default(), game_data)?;
 
     game.run();
 

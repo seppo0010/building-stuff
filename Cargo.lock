@@ -465,6 +465,7 @@ dependencies = [
  "ncollide3d 0.17.3 (registry+https://github.com/rust-lang/crates.io-index)",
  "nphysics3d 0.9.4 (registry+https://github.com/rust-lang/crates.io-index)",
  "specs 0.14.1 (registry+https://github.com/rust-lang/crates.io-index)",
+ "winit 0.18.0 (registry+https://github.com/rust-lang/crates.io-index)",
 ]
 
 [[package]]
