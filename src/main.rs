@@ -14,16 +14,15 @@ use std::{
 
 use amethyst::{
     assets::{Loader, ProgressCounter},
-    controls::{CursorHideSystem, MouseFocusUpdateSystem,
-    HideCursor, WindowFocus,
-},
+    controls::{CursorHideSystem, HideCursor, MouseFocusUpdateSystem, WindowFocus},
     core::{
-        nalgebra::{UnitQuaternion, Vector3},
+        nalgebra::{Unit, UnitQuaternion, Vector3},
+        timing::Time,
         transform::TransformBundle,
         Transform,
     },
     ecs::{Component, Join, Read, ReadStorage, System, VecStorage, Write, WriteStorage},
-    input::{InputBundle, InputHandler},
+    input::{get_input_axis_simple, InputBundle, InputHandler},
     prelude::*,
     renderer::{
         AmbientColor, Camera, DirectionalLight, DisplayConfig, DrawShaded, Light, Material,
@@ -48,7 +47,7 @@ use nphysics3d::{
     volumetric::Volumetric,
     world::World as PhysicsWorld,
 };
-use specs::{Entities, Entity, prelude::Resources};
+use specs::{prelude::Resources, Entities, Entity};
 use winit::{DeviceEvent, Event};
 
 const COLLIDER_MARGIN: f32 = 0.01;
@@ -500,7 +499,7 @@ impl Default for MovementSystem {
             sensitivity_x: 0.2,
             sensitivity_y: 0.2,
             speed: 1.0,
-    event_reader: None,
+            event_reader: None,
         }
     }
 }
@@ -512,16 +511,33 @@ impl<'s> System<'s> for MovementSystem {
         ReadStorage<'s, Camera>,
         Read<'s, WindowFocus>,
         Read<'s, HideCursor>,
+        Read<'s, Time>,
+        Read<'s, InputHandler<String, String>>,
     );
 
-    fn run(&mut self, (events, mut transforms, cameras, focus, hide): Self::SystemData) {
-        let focused = focus.is_focused;
-        for event in
-            events.read(&mut self.event_reader.as_mut().expect(
-                "`MovementSystem::setup` was not called before `MovementSystem::run`",
-            ))
-        {
-            if focused && hide.hide {
+    fn run(
+        &mut self,
+        (events, mut transforms, cameras, focus, hide, time, input): Self::SystemData,
+    ) {
+        if focus.is_focused && hide.hide {
+            let x = get_input_axis_simple(&Some("move_x".to_owned()), &input);
+            let z = get_input_axis_simple(&Some("move_z".to_owned()), &input);
+            if let Some(dir) = Unit::try_new(Vector3::new(x, 0.0, z), 1.0e-6) {
+                for (transform, _) in (&mut transforms, &cameras).join() {
+                    let mut iso = transform.isometry_mut();
+                    let d = iso.rotation * dir.as_ref();
+                    let total = d.x.abs() + d.z.abs();
+                    iso.translation.vector += Vector3::new(d.x / total, 0.0, d.z / total)
+                        * time.delta_seconds()
+                        * self.speed;
+                }
+            }
+            for event in events.read(
+                &mut self
+                    .event_reader
+                    .as_mut()
+                    .expect("`MovementSystem::setup` was not called before `MovementSystem::run`"),
+            ) {
                 if let Event::DeviceEvent { ref event, .. } = *event {
                     if let DeviceEvent::MouseMotion { delta: (x, y) } = *event {
                         for (transform, _) in (&mut transforms, &cameras).join() {
@@ -532,7 +548,7 @@ impl<'s> System<'s> for MovementSystem {
                                 transform.pitch_local((-1.0_f32).to_radians());
                             }
                             while (transform.isometry().rotation * Vector3::z()).y > 0.8 {
-                                 transform.pitch_local((1.0_f32).to_radians());
+                                transform.pitch_local((1.0_f32).to_radians());
                             }
                         }
                     }
@@ -569,22 +585,18 @@ fn main() -> amethyst::Result<()> {
         .with_bundle(
             InputBundle::<String, String>::new().with_bindings_from_file(&key_bindings_path)?,
         )?
-        .with(
-            MovementSystem::default(),
-            "movement_system",
-            &[],
-        )
+        .with(MovementSystem::default(), "movement_system", &[])
         .with_bundle(TransformBundle::new().with_dep(&["movement_system"]))?
         .with_bundle(UiBundle::<String, String>::new())?
         .with_bundle(
             RenderBundle::new(pipe, Some(DisplayConfig::load(&display_config_path)))
                 .with_sprite_sheet_processor(),
         )?
- .with(
+        .with(
             MouseFocusUpdateSystem::new(),
             "mouse_focus",
             &["movement_system"],
-)
+        )
         .with(CursorHideSystem::new(), "cursor_hide", &["mouse_focus"])
         .with(
             PointingSystem::default(),
