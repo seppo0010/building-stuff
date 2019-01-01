@@ -2,7 +2,7 @@ extern crate amethyst;
 extern crate nalgebra as na;
 extern crate ncollide3d;
 extern crate nphysics3d;
-// extern crate nphysics_testbed3d;
+extern crate nphysics_testbed3d;
 extern crate specs;
 extern crate winit;
 
@@ -21,7 +21,7 @@ use amethyst::{
         transform::TransformBundle,
         Transform,
     },
-    ecs::{Component, Join, Read, ReadStorage, System, VecStorage, Write, WriteStorage},
+    ecs::{Component, Join, Read, ReadStorage, System, VecStorage, FlaggedStorage, Write, WriteStorage},
     input::{get_input_axis_simple, InputBundle, InputHandler},
     prelude::*,
     renderer::{
@@ -37,11 +37,14 @@ use amethyst::{
 use na::{Isometry3, Point3, Vector3 as PhysicsVector3};
 
 use ncollide3d::{
+    bounding_volume::{AABB, HasBoundingVolume},
     query::Ray,
-    shape::{Cuboid, ShapeHandle},
+    shape::{Cuboid, Cylinder, ShapeHandle, TriMesh},
+    transformation::ToTriMesh,
     world::{CollisionGroups, CollisionObjectHandle},
 };
 use nphysics3d::{
+    algebra::Inertia3,
     force_generator::{ConstantAcceleration, ForceGeneratorHandle},
     object::{BodyHandle, Material as PhysicsMaterial, RigidBody},
     volumetric::Volumetric,
@@ -84,6 +87,11 @@ impl DerefMut for MyWorld {
 pub struct PhysicsBody(CollisionObjectHandle);
 impl Component for PhysicsBody {
     type Storage = VecStorage<Self>;
+}
+
+pub struct CameraSelf;
+impl Component for CameraSelf {
+    type Storage = FlaggedStorage<Self>;
 }
 
 #[derive(Default)]
@@ -225,6 +233,37 @@ impl GameState {
             .build();
     }
 
+    fn create_self(&mut self, world: &mut World, physics_world: &mut MyWorld) {
+        // this is a bit strange, but ncollide has two different TriMesh that are quite similar
+        let cylinder = Cylinder::new(0.9, 0.25);
+        let mut t = cylinder.to_trimesh(10);
+        t.unify_index_buffer();
+        let aabb: AABB<f32> = cylinder.bounding_volume(&Isometry3::identity());
+        let geom = ShapeHandle::new(TriMesh::new(t.coords, t.indices.unwrap_unified().into_iter().map(|p| Point3::new(p.coords.x as usize, p.coords.y as usize, p.coords.z as usize)).collect(), t.uvs));
+        let inertia = Inertia3::zero();
+        let center_of_mass = aabb.center();
+
+        let pos = Isometry3::new(
+            PhysicsVector3::new(0.0, 3.0, 0.0),
+            Vector3::new(0.0, 1.0, 0.0),
+        );
+        let handle = physics_world.add_rigid_body(pos, inertia, center_of_mass);
+
+        let body_handle = physics_world.add_collider(
+            COLLIDER_MARGIN,
+            geom.clone(),
+            handle,
+            Isometry3::identity(),
+            PhysicsMaterial::default(),
+        );
+
+        world
+            .create_entity()
+            .named("self")
+            .with(PhysicsBody(body_handle))
+            .with(CameraSelf)
+            .build();
+    }
     fn create_camera(&mut self, world: &mut World) {
         let mut t = Transform::default();
         *t.translation_mut() = Vector3::new(0.0, 1.8, 0.0);
@@ -251,6 +290,7 @@ impl GameState {
 impl SimpleState for GameState {
     fn on_start(&mut self, data: StateData<GameData>) {
         data.world.register::<PhysicsBody>();
+        data.world.register::<CameraSelf>();
         let mut physics_world = MyWorld::default();
         self.create_light(data.world);
         self.create_floor(data.world, &mut physics_world);
@@ -260,14 +300,15 @@ impl SimpleState for GameState {
         }
         physics_world.step();
         physics_world.set_gravity(-PhysicsVector3::y() * 9.81);
+        self.create_self(data.world, &mut physics_world);
         self.create_camera(data.world);
         self.create_center(data.world);
 
-        // let mut testbed = nphysics_testbed3d::Testbed::new(physics_world.inner);
-        // testbed.look_at(Point3::new(-4.0, 1.0, -4.0), Point3::new(0.0, 1.0, 0.0));
-        // testbed.run();
+        let mut testbed = nphysics_testbed3d::Testbed::new(physics_world.inner);
+        testbed.look_at(Point3::new(-4.0, 1.0, -4.0), Point3::new(0.0, 1.0, 0.0));
+        testbed.run();
 
-        data.world.add_resource(physics_world);
+        // data.world.add_resource(physics_world);
     }
 }
 
