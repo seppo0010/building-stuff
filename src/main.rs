@@ -2,7 +2,7 @@ extern crate amethyst;
 extern crate nalgebra as na;
 extern crate ncollide3d;
 extern crate nphysics3d;
-extern crate nphysics_testbed3d;
+// extern crate nphysics_testbed3d;
 extern crate specs;
 extern crate winit;
 
@@ -44,7 +44,6 @@ use ncollide3d::{
     world::{CollisionGroups, CollisionObjectHandle},
 };
 use nphysics3d::{
-    algebra::Inertia3,
     force_generator::{ConstantAcceleration, ForceGeneratorHandle},
     object::{BodyHandle, Material as PhysicsMaterial, RigidBody},
     volumetric::Volumetric,
@@ -240,7 +239,7 @@ impl GameState {
         t.unify_index_buffer();
         let aabb: AABB<f32> = cylinder.bounding_volume(&Isometry3::identity());
         let geom = ShapeHandle::new(TriMesh::new(t.coords, t.indices.unwrap_unified().into_iter().map(|p| Point3::new(p.coords.x as usize, p.coords.y as usize, p.coords.z as usize)).collect(), t.uvs));
-        let inertia = Inertia3::zero();
+        let inertia = Cuboid::new(aabb.half_extents()).inertia(1.0);
         let center_of_mass = aabb.center();
 
         let pos = Isometry3::new(
@@ -304,11 +303,11 @@ impl SimpleState for GameState {
         self.create_camera(data.world);
         self.create_center(data.world);
 
-        let mut testbed = nphysics_testbed3d::Testbed::new(physics_world.inner);
-        testbed.look_at(Point3::new(-4.0, 1.0, -4.0), Point3::new(0.0, 1.0, 0.0));
-        testbed.run();
+        // let mut testbed = nphysics_testbed3d::Testbed::new(physics_world.inner);
+        // testbed.look_at(Point3::new(-4.0, 1.0, -4.0), Point3::new(0.0, 1.0, 0.0));
+        // testbed.run();
 
-        // data.world.add_resource(physics_world);
+        data.world.add_resource(physics_world);
     }
 }
 
