@@ -21,7 +21,9 @@ use amethyst::{
         transform::TransformBundle,
         Transform,
     },
-    ecs::{Component, Join, Read, ReadStorage, System, VecStorage, FlaggedStorage, Write, WriteStorage},
+    ecs::{
+        Component, FlaggedStorage, Join, Read, ReadStorage, System, VecStorage, Write, WriteStorage,
+    },
     input::{get_input_axis_simple, InputBundle, InputHandler},
     prelude::*,
     renderer::{
@@ -37,7 +39,7 @@ use amethyst::{
 use na::{Isometry3, Point3, Vector3 as PhysicsVector3};
 
 use ncollide3d::{
-    bounding_volume::{AABB, HasBoundingVolume},
+    bounding_volume::{HasBoundingVolume, AABB},
     query::Ray,
     shape::{Cuboid, Cylinder, ShapeHandle, TriMesh},
     transformation::ToTriMesh,
@@ -238,7 +240,21 @@ impl GameState {
         let mut t = cylinder.to_trimesh(10);
         t.unify_index_buffer();
         let aabb: AABB<f32> = cylinder.bounding_volume(&Isometry3::identity());
-        let geom = ShapeHandle::new(TriMesh::new(t.coords, t.indices.unwrap_unified().into_iter().map(|p| Point3::new(p.coords.x as usize, p.coords.y as usize, p.coords.z as usize)).collect(), t.uvs));
+        let geom = ShapeHandle::new(TriMesh::new(
+            t.coords,
+            t.indices
+                .unwrap_unified()
+                .into_iter()
+                .map(|p| {
+                    Point3::new(
+                        p.coords.x as usize,
+                        p.coords.y as usize,
+                        p.coords.z as usize,
+                    )
+                })
+                .collect(),
+            t.uvs,
+        ));
         let inertia = Cuboid::new(aabb.half_extents()).inertia(1.0);
         let center_of_mass = aabb.center();
 
@@ -544,16 +560,17 @@ impl Default for MovementSystem {
     }
 }
 
+type MovementSystemData<'s> = (
+    Read<'s, EventChannel<Event>>,
+    WriteStorage<'s, Transform>,
+    ReadStorage<'s, Camera>,
+    Read<'s, WindowFocus>,
+    Read<'s, HideCursor>,
+    Read<'s, Time>,
+    Read<'s, InputHandler<String, String>>,
+);
 impl<'s> System<'s> for MovementSystem {
-    type SystemData = (
-        Read<'s, EventChannel<Event>>,
-        WriteStorage<'s, Transform>,
-        ReadStorage<'s, Camera>,
-        Read<'s, WindowFocus>,
-        Read<'s, HideCursor>,
-        Read<'s, Time>,
-        Read<'s, InputHandler<String, String>>,
-    );
+    type SystemData = MovementSystemData<'s>;
 
     fn run(
         &mut self,
