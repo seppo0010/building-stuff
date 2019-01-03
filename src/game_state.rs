@@ -32,6 +32,7 @@ use nphysics3d::{
     volumetric::Volumetric,
 };
 const COLLIDER_MARGIN: f32 = 0.01;
+const CAMERA_HEIGHT: f32 = 1.8;
 
 #[derive(Default)]
 pub struct GameState {
@@ -175,7 +176,7 @@ impl GameState {
 
     fn create_self(&mut self, world: &mut World, physics_world: &mut MyWorld) {
         // this is a bit strange, but ncollide has two different TriMesh that are quite similar
-        let cylinder = Cylinder::new(0.9, 0.75);
+        let cylinder = Cylinder::new(CAMERA_HEIGHT / 2.0, 0.75);
         let mut t = cylinder.to_trimesh(10);
         t.unify_index_buffer();
         let aabb: AABB<f32> = cylinder.bounding_volume(&Isometry3::identity());
@@ -198,7 +199,7 @@ impl GameState {
         let center_of_mass = aabb.center();
 
         let pos = Isometry3::new(
-            PhysicsVector3::new(0.0, 0.9, 0.0),
+            PhysicsVector3::new(0.0, CAMERA_HEIGHT / 2.0, 0.0),
             Vector3::new(0.0, 1.0, 0.0),
         );
         let handle = physics_world.add_rigid_body(pos, inertia, center_of_mass);
@@ -224,7 +225,7 @@ impl GameState {
     }
     fn create_camera(&mut self, world: &mut World) {
         let mut t = Transform::default();
-        *t.translation_mut() = Vector3::new(0.0, 1.8, 0.0);
+        *t.translation_mut() = Vector3::new(0.0, CAMERA_HEIGHT, 0.0);
         *t.rotation_mut() = UnitQuaternion::new_observer_frame(
             &Vector3::new(0.0, 0.0, -1.0),
             &Vector3::new(0.0, 1.0, 0.0),

@@ -22,6 +22,7 @@ use nphysics3d::{
 use specs::{Entities, Entity};
 
 const MAGIC_ANGULAR_VELOCITY_MULTIPLIER: f32 = 50.0;
+const MAX_TOI_GRAB: f32 = 4.0;
 
 struct SelectedObject {
     entity: Entity,
@@ -44,7 +45,7 @@ impl PointingSystem {
         transforms: &ReadStorage<Transform>,
     ) -> (Ray<f32>, Isometry3<f32>) {
         let isometry = (cameras, transforms).join().next().unwrap().1.isometry();
-        let r = isometry.rotation * Vector3::new(0.0, 0.0, 1.0);
+        let r = isometry.rotation * Vector3::z();
         (
             Ray::new(
                 Point3::new(
@@ -109,8 +110,8 @@ impl PointingSystem {
         let so = self.selected_object.as_mut().unwrap();
         let linear = camera_isometry.translation.vector
             - so.previous_camera_position.translation.vector
-            + (so.previous_camera_position.rotation * Vector3::new(0.0, 0.0, 1.0)
-                - camera_isometry.rotation * Vector3::new(0.0, 0.0, 1.0))
+            + (so.previous_camera_position.rotation * Vector3::z()
+                - camera_isometry.rotation * Vector3::z())
                 * so.distance;
         let angular = (rb.position().rotation * so.box_forward)
             .cross(&(camera_isometry.rotation * Vector3::z()))
@@ -134,7 +135,7 @@ impl PointingSystem {
 
         self.selected_object = self
             .find_pointed_object(&ray, entities, &physics_world, physics_bodies, grabbables)
-            .filter(|(_, toi)| *toi < 4.0)
+            .filter(|(_, toi)| *toi < MAX_TOI_GRAB)
             .map(|(entity, toi)| {
                 let mut f = ConstantAcceleration::new(
                     -physics_world.gravity(),
