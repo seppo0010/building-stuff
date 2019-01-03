@@ -1,5 +1,9 @@
 use std::f32;
 
+use crate::{
+    components::{CameraSelf, PhysicsBody},
+    resources::MyWorld,
+};
 use amethyst::{
     controls::{HideCursor, WindowFocus},
     core::{
@@ -7,7 +11,7 @@ use amethyst::{
         timing::Time,
         Transform,
     },
-    ecs::{Join, Read, ReadStorage, System, WriteStorage},
+    ecs::{Join, Read, ReadStorage, System, Write, WriteStorage},
     input::{get_input_axis_simple, InputHandler},
     renderer::Camera,
 };
@@ -28,21 +32,55 @@ type TranslationSystemData<'s> = (
     Read<'s, HideCursor>,
     Read<'s, Time>,
     Read<'s, InputHandler<String, String>>,
+    ReadStorage<'s, CameraSelf>,
+    Write<'s, MyWorld>,
+    WriteStorage<'s, PhysicsBody>,
 );
 impl<'s> System<'s> for TranslationSystem {
     type SystemData = TranslationSystemData<'s>;
 
-    fn run(&mut self, (mut transforms, cameras, focus, hide, time, input): Self::SystemData) {
-        if focus.is_focused && hide.hide {
-            let x = get_input_axis_simple(&Some("move_x".to_owned()), &input);
-            let z = get_input_axis_simple(&Some("move_z".to_owned()), &input);
-            if let Some(dir) = Unit::try_new(Vector3::new(x, 0.0, z), 1.0e-6) {
-                for (transform, _) in (&mut transforms, &cameras).join() {
-                    let mut iso = transform.isometry_mut();
-                    let d = iso.rotation * dir.as_ref();
-                    if let Some(d) = Unit::try_new(Vector3::new(d.x, 0.0, d.z), 1.0e-6) {
-                        iso.translation.vector +=
-                            Vector3::new(d.x, 0.0, d.z) * time.delta_seconds() * self.speed;
+    fn run(
+        &mut self,
+        (
+            mut transforms,
+            cameras,
+            focus,
+            hide,
+            time,
+            input,
+            cameraself,
+            mut physics_world,
+            mut physics_body,
+        ): Self::SystemData,
+    ) {
+        let world: &mut Write<MyWorld> = &mut physics_world;
+        for (_, body) in (&cameraself, &mut physics_body).join() {
+            if let Some(ref mut rb) = world
+                .collider_body_handle(body.0)
+                .and_then(|bh| world.rigid_body_mut(bh))
+            {
+                rb.set_linear_velocity(Vector3::new(0.0, 0.0, 0.0));
+                rb.set_angular_velocity(Vector3::new(0.0, 0.0, 0.0));
+            }
+            if focus.is_focused && hide.hide {
+                let x = get_input_axis_simple(&Some("move_x".to_owned()), &input);
+                let z = get_input_axis_simple(&Some("move_z".to_owned()), &input);
+                if let Some(dir) = Unit::try_new(Vector3::new(x, 0.0, z), 1.0e-6) {
+                    for (transform, _) in (&mut transforms, &cameras).join() {
+                        let mut iso = transform.isometry_mut();
+                        let d = iso.rotation * dir.as_ref();
+                        if let Some(d) = Unit::try_new(Vector3::new(d.x, 0.0, d.z), 1.0e-6) {
+                            let linear = Vector3::new(d.x, 0.0, d.z);
+                            if let Some(ref mut rb) = world
+                                .collider_body_handle(body.0)
+                                .and_then(|bh| world.rigid_body_mut(bh))
+                            {
+                                rb.set_linear_velocity(
+                                    linear * time.delta_seconds() * self.speed * 60.0_f32,
+                                );
+                                iso.translation.vector = rb.position().translation.vector;
+                            }
+                        }
                     }
                 }
             }

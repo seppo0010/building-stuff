@@ -1,6 +1,9 @@
 use std::{cmp::Ordering, f32};
 
-use crate::{components::PhysicsBody, resources::MyWorld};
+use crate::{
+    components::{Grabbable, PhysicsBody},
+    resources::MyWorld,
+};
 
 use amethyst::{
     core::{nalgebra::Vector3, Transform},
@@ -11,7 +14,7 @@ use amethyst::{
 
 use na::{Isometry3, Point3, Vector3 as PhysicsVector3};
 
-use ncollide3d::{query::Ray, world::CollisionGroups};
+use ncollide3d::query::{Ray, RayCast};
 use nphysics3d::{
     force_generator::{ConstantAcceleration, ForceGeneratorHandle},
     object::RigidBody,
@@ -62,24 +65,21 @@ impl PointingSystem {
         entities: &Entities,
         physics_world: &Write<MyWorld>,
         physics_bodies: &WriteStorage<PhysicsBody>,
+        grabbables: &ReadStorage<Grabbable>,
     ) -> Option<(Entity, f32)> {
-        let all_groups = &CollisionGroups::new();
-
-        let handle = physics_world
-            .collision_world()
-            .interferences_with_ray(&ray, all_groups)
-            .min_by(|(_, inter1), (_, inter2)| {
-                inter1
-                    .toi
-                    .partial_cmp(&inter2.toi)
-                    .unwrap_or(Ordering::Equal)
-            })
-            .map(|(col, inter)| (col.handle(), inter.toi));
-
-        (entities, physics_bodies)
+        (entities, physics_bodies, grabbables)
             .join()
-            .find(|(_, b)| Some(b.0) == handle.map(|x| x.0))
-            .map(|(e, _)| (e, handle.unwrap().1))
+            .flat_map(|(e, b, _)| {
+                let co = physics_world
+                    .collision_world()
+                    .collision_object(b.0)
+                    .unwrap();
+                co.shape()
+                    .toi_with_ray(co.position(), &ray, true)
+                    .map(|x| (e, b, x))
+            })
+            .min_by(|(_, _, toi1), (_, _, toi2)| toi1.partial_cmp(&toi2).unwrap_or(Ordering::Equal))
+            .map(|(e, _, toi)| (e, toi))
     }
 
     fn get_selected_object_rigid_body_mut<'a>(
@@ -128,11 +128,12 @@ impl PointingSystem {
         physics_world: &mut Write<MyWorld>,
         transforms: &ReadStorage<Transform>,
         physics_bodies: &WriteStorage<PhysicsBody>,
+        grabbables: &ReadStorage<Grabbable>,
     ) {
         let (ray, camera_isometry) = self.find_current_ray(&cameras, &transforms);
 
         self.selected_object = self
-            .find_pointed_object(&ray, entities, &physics_world, physics_bodies)
+            .find_pointed_object(&ray, entities, &physics_world, physics_bodies, grabbables)
             .filter(|(_, toi)| *toi < 4.0)
             .map(|(entity, toi)| {
                 let mut f = ConstantAcceleration::new(
@@ -184,12 +185,13 @@ type PointingSystemData<'s> = (
     ReadStorage<'s, Transform>,
     WriteStorage<'s, PhysicsBody>,
     Read<'s, InputHandler<String, String>>,
+    ReadStorage<'s, Grabbable>,
 );
 impl<'s> System<'s> for PointingSystem {
     type SystemData = PointingSystemData<'s>;
     fn run(
         &mut self,
-        (entities, cameras, mut physics_world, transforms, physics_bodies, input): Self::SystemData,
+        (entities, cameras, mut physics_world, transforms, physics_bodies, input, grabbables): Self::SystemData,
     ) {
         let is_left_click = input.mouse_button_is_down(MouseButton::Left);
         match (is_left_click, self.selected_object.is_some()) {
@@ -205,6 +207,7 @@ impl<'s> System<'s> for PointingSystem {
                 &mut physics_world,
                 &transforms,
                 &physics_bodies,
+                &grabbables,
             ),
             (false, true) => self.drop_object(&mut physics_world),
             (false, false) => (),

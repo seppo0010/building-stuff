@@ -1,7 +1,7 @@
 use std::f32;
 
 use crate::{
-    components::{CameraSelf, PhysicsBody},
+    components::{CameraSelf, Grabbable, PhysicsBody},
     resources::MyWorld,
 };
 
@@ -126,6 +126,7 @@ impl GameState {
             .with(self.cube_mesh.clone().unwrap())
             .with(self.cube_materials[i].clone())
             .with(PhysicsBody(body_handle))
+            .with(Grabbable)
             .build();
     }
 
@@ -204,7 +205,7 @@ impl GameState {
         physics_world
             .rigid_body_mut(handle)
             .unwrap()
-            .set_status(BodyStatus::Static);
+            .set_status(BodyStatus::Kinematic);
 
         let body_handle = physics_world.add_collider(
             COLLIDER_MARGIN,
