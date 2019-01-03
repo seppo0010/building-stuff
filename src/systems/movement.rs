@@ -55,10 +55,11 @@ impl<'s> System<'s> for MovementSystem {
                 for (transform, _) in (&mut transforms, &cameras).join() {
                     let mut iso = transform.isometry_mut();
                     let d = iso.rotation * dir.as_ref();
-                    let total = d.x.abs() + d.z.abs();
-                    iso.translation.vector += Vector3::new(d.x / total, 0.0, d.z / total)
-                        * time.delta_seconds()
-                        * self.speed;
+                    if let Some(d) = Unit::try_new(Vector3::new(d.x, 0.0, d.z), 1.0e-6) {
+                        iso.translation.vector += Vector3::new(d.x, 0.0, d.z)
+                            * time.delta_seconds()
+                            * self.speed;
+                    }
                 }
             }
             for event in events.read(
