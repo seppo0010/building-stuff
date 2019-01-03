@@ -6,7 +6,7 @@ use crate::{
 };
 
 use amethyst::{
-    core::{nalgebra::Vector3, Transform},
+    core::{nalgebra::Vector3, timing::Time, Transform},
     ecs::{Join, Read, ReadStorage, System, Write, WriteStorage},
     input::InputHandler,
     renderer::{Camera, MouseButton},
@@ -21,7 +21,6 @@ use nphysics3d::{
 };
 use specs::{Entities, Entity};
 
-const MAGIC_LINEAR_SPEED_MULTIPLIER: f32 = 60.0;
 const MAGIC_ANGULAR_VELOCITY_MULTIPLIER: f32 = 50.0;
 
 struct SelectedObject {
@@ -100,6 +99,7 @@ impl PointingSystem {
         transforms: &ReadStorage<Transform>,
         physics_bodies: &WriteStorage<PhysicsBody>,
         world: &mut Write<MyWorld>,
+        time: &Read<Time>,
     ) {
         let camera_isometry = self.find_current_ray(cameras, transforms).1;
         let rb = match self.get_selected_object_rigid_body_mut(physics_bodies, world) {
@@ -116,7 +116,7 @@ impl PointingSystem {
             .cross(&(camera_isometry.rotation * Vector3::z()))
             + (rb.position().rotation * so.box_up)
                 .cross(&(camera_isometry.rotation * Vector3::y()));
-        rb.set_linear_velocity(linear * MAGIC_LINEAR_SPEED_MULTIPLIER);
+        rb.set_linear_velocity(linear / time.delta_seconds());
         rb.set_angular_velocity(angular * MAGIC_ANGULAR_VELOCITY_MULTIPLIER);
         so.previous_camera_position = camera_isometry;
     }
@@ -186,12 +186,13 @@ type PointingSystemData<'s> = (
     WriteStorage<'s, PhysicsBody>,
     Read<'s, InputHandler<String, String>>,
     ReadStorage<'s, Grabbable>,
+    Read<'s, Time>,
 );
 impl<'s> System<'s> for PointingSystem {
     type SystemData = PointingSystemData<'s>;
     fn run(
         &mut self,
-        (entities, cameras, mut physics_world, transforms, physics_bodies, input, grabbables): Self::SystemData,
+        (entities, cameras, mut physics_world, transforms, physics_bodies, input, grabbables, time): Self::SystemData,
     ) {
         let is_left_click = input.mouse_button_is_down(MouseButton::Left);
         match (is_left_click, self.selected_object.is_some()) {
@@ -200,6 +201,7 @@ impl<'s> System<'s> for PointingSystem {
                 &transforms,
                 &physics_bodies,
                 &mut physics_world,
+                &time,
             ),
             (true, false) => self.grab_object(
                 &entities,

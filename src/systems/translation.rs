@@ -8,7 +8,6 @@ use amethyst::{
     controls::{HideCursor, WindowFocus},
     core::{
         nalgebra::{Unit, Vector3},
-        timing::Time,
         Transform,
     },
     ecs::{Join, Read, ReadStorage, System, Write, WriteStorage},
@@ -30,7 +29,6 @@ type TranslationSystemData<'s> = (
     ReadStorage<'s, Camera>,
     Read<'s, WindowFocus>,
     Read<'s, HideCursor>,
-    Read<'s, Time>,
     Read<'s, InputHandler<String, String>>,
     ReadStorage<'s, CameraSelf>,
     Write<'s, MyWorld>,
@@ -46,7 +44,6 @@ impl<'s> System<'s> for TranslationSystem {
             cameras,
             focus,
             hide,
-            time,
             input,
             cameraself,
             mut physics_world,
@@ -80,9 +77,7 @@ impl<'s> System<'s> for TranslationSystem {
                                 .collider_body_handle(body.0)
                                 .and_then(|bh| world.rigid_body_mut(bh))
                             {
-                                rb.set_linear_velocity(
-                                    linear * time.delta_seconds() * self.speed * 60.0_f32,
-                                );
+                                rb.set_linear_velocity(linear * self.speed);
                                 let pos = rb.position().translation.vector;
                                 iso.translation.vector = Vector3::new(pos.x, h, pos.z);
                             }
