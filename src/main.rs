@@ -13,7 +13,7 @@ mod systems;
 
 use crate::{
     game_state::GameState,
-    systems::{MovementSystem, PhysicsSystem, PointingSystem},
+    systems::{PhysicsSystem, PointingSystem, RotationSystem, TranslationSystem},
 };
 
 use amethyst::{
@@ -46,23 +46,20 @@ fn main() -> amethyst::Result<()> {
         .with_bundle(
             InputBundle::<String, String>::new().with_bindings_from_file(&key_bindings_path)?,
         )?
-        .with(MovementSystem::default(), "movement_system", &[])
-        .with_bundle(TransformBundle::new().with_dep(&["movement_system"]))?
+        .with(RotationSystem::default(), "rotation_system", &[])
+        .with(TranslationSystem::default(), "translation_system", &[])
+        .with_bundle(TransformBundle::new().with_dep(&[]))?
         .with_bundle(UiBundle::<String, String>::new())?
         .with_bundle(
             RenderBundle::new(pipe, Some(DisplayConfig::load(&display_config_path)))
                 .with_sprite_sheet_processor(),
         )?
-        .with(
-            MouseFocusUpdateSystem::new(),
-            "mouse_focus",
-            &["movement_system"],
-        )
+        .with(MouseFocusUpdateSystem::new(), "mouse_focus", &[])
         .with(CursorHideSystem::new(), "cursor_hide", &["mouse_focus"])
         .with(
             PointingSystem::default(),
             "pointing_system",
-            &["movement_system"],
+            &["rotation_system", "translation_system"],
         )
         .with(
             PhysicsSystem::default(),

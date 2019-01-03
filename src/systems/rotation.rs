@@ -2,71 +2,46 @@ use std::f32;
 
 use amethyst::{
     controls::{HideCursor, WindowFocus},
-    core::{
-        nalgebra::{Unit, Vector3},
-        timing::Time,
-        Transform,
-    },
+    core::{nalgebra::Vector3, Transform},
     ecs::{Join, Read, ReadStorage, System, WriteStorage},
-    input::{get_input_axis_simple, InputHandler},
     renderer::Camera,
     shrev::{EventChannel, ReaderId},
 };
 use specs::prelude::Resources;
 use winit::{DeviceEvent, Event};
-pub struct MovementSystem {
+pub struct RotationSystem {
     sensitivity_x: f32,
     sensitivity_y: f32,
-    speed: f32,
     event_reader: Option<ReaderId<Event>>,
 }
 
-impl Default for MovementSystem {
+impl Default for RotationSystem {
     fn default() -> Self {
-        MovementSystem {
+        RotationSystem {
             sensitivity_x: 0.2,
             sensitivity_y: 0.2,
-            speed: 1.0,
             event_reader: None,
         }
     }
 }
 
-type MovementSystemData<'s> = (
+type RotationSystemData<'s> = (
     Read<'s, EventChannel<Event>>,
     WriteStorage<'s, Transform>,
     ReadStorage<'s, Camera>,
     Read<'s, WindowFocus>,
     Read<'s, HideCursor>,
-    Read<'s, Time>,
-    Read<'s, InputHandler<String, String>>,
 );
-impl<'s> System<'s> for MovementSystem {
-    type SystemData = MovementSystemData<'s>;
+impl<'s> System<'s> for RotationSystem {
+    type SystemData = RotationSystemData<'s>;
 
-    fn run(
-        &mut self,
-        (events, mut transforms, cameras, focus, hide, time, input): Self::SystemData,
-    ) {
+    fn run(&mut self, (events, mut transforms, cameras, focus, hide): Self::SystemData) {
         if focus.is_focused && hide.hide {
-            let x = get_input_axis_simple(&Some("move_x".to_owned()), &input);
-            let z = get_input_axis_simple(&Some("move_z".to_owned()), &input);
-            if let Some(dir) = Unit::try_new(Vector3::new(x, 0.0, z), 1.0e-6) {
-                for (transform, _) in (&mut transforms, &cameras).join() {
-                    let mut iso = transform.isometry_mut();
-                    let d = iso.rotation * dir.as_ref();
-                    if let Some(d) = Unit::try_new(Vector3::new(d.x, 0.0, d.z), 1.0e-6) {
-                        iso.translation.vector += Vector3::new(d.x, 0.0, d.z)
-                            * time.delta_seconds()
-                            * self.speed;
-                    }
-                }
-            }
             for event in events.read(
                 &mut self
                     .event_reader
                     .as_mut()
-                    .expect("`MovementSystem::setup` was not called before `MovementSystem::run`"),
+                    .expect("`RotationSystem::setup` was not called before `RotationSystem::run`"),
             ) {
                 if let Event::DeviceEvent { ref event, .. } = *event {
                     if let DeviceEvent::MouseMotion { delta: (x, y) } = *event {

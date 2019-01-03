@@ -201,7 +201,10 @@ impl GameState {
             Vector3::new(0.0, 1.0, 0.0),
         );
         let handle = physics_world.add_rigid_body(pos, inertia, center_of_mass);
-        physics_world.rigid_body_mut(handle).unwrap().set_status(BodyStatus::Static);
+        physics_world
+            .rigid_body_mut(handle)
+            .unwrap()
+            .set_status(BodyStatus::Static);
 
         let body_handle = physics_world.add_collider(
             COLLIDER_MARGIN,
