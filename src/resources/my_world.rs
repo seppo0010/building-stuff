@@ -3,7 +3,7 @@ use std::ops::{Deref, DerefMut};
 
 type MyCollisionWorld = PhysicsWorld<f32>;
 pub struct MyWorld {
-    inner: MyCollisionWorld,
+    pub inner: MyCollisionWorld,
 }
 
 impl Default for MyWorld {

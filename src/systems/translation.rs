@@ -71,14 +71,20 @@ impl<'s> System<'s> for TranslationSystem {
                         let d = iso.rotation * dir.as_ref();
                         if let Some(d) = Unit::try_new(Vector3::new(d.x, 0.0, d.z), 1.0e-6) {
                             let linear = Vector3::new(d.x, 0.0, d.z);
-                            if let Some(ref mut rb) = world
+                            let h = if let Some(co) = world.collider(body.0) {
+                                co.shape().aabb(co.position()).maxs().y
+                            } else {
+                                0.0
+                            };
+                            if let Some(rb) = world
                                 .collider_body_handle(body.0)
                                 .and_then(|bh| world.rigid_body_mut(bh))
                             {
                                 rb.set_linear_velocity(
                                     linear * time.delta_seconds() * self.speed * 60.0_f32,
                                 );
-                                iso.translation.vector = rb.position().translation.vector;
+                                let pos = rb.position().translation.vector;
+                                iso.translation.vector = Vector3::new(pos.x, h, pos.z);
                             }
                         }
                     }
