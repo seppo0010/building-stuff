@@ -4,7 +4,8 @@ use amethyst::{
     controls::{HideCursor, WindowFocus},
     core::{nalgebra::Vector3, Transform},
     ecs::{Join, Read, ReadStorage, System, WriteStorage},
-    renderer::Camera,
+    input::InputHandler,
+    renderer::{Camera, MouseButton},
     shrev::{EventChannel, ReaderId},
 };
 use specs::prelude::Resources;
@@ -31,18 +32,20 @@ type RotationSystemData<'s> = (
     ReadStorage<'s, Camera>,
     Read<'s, WindowFocus>,
     Read<'s, HideCursor>,
+    Read<'s, InputHandler<String, String>>,
 );
+
 impl<'s> System<'s> for RotationSystem {
     type SystemData = RotationSystemData<'s>;
 
-    fn run(&mut self, (events, mut transforms, cameras, focus, hide): Self::SystemData) {
-        if focus.is_focused && hide.hide {
-            for event in events.read(
-                &mut self
-                    .event_reader
-                    .as_mut()
-                    .expect("`RotationSystem::setup` was not called before `RotationSystem::run`"),
-            ) {
+    fn run(&mut self, (events, mut transforms, cameras, focus, hide, input): Self::SystemData) {
+        for event in events.read(
+            &mut self
+                .event_reader
+                .as_mut()
+                .expect("`RotationSystem::setup` was not called before `RotationSystem::run`"),
+        ) {
+            if !input.mouse_button_is_down(MouseButton::Right) && focus.is_focused && hide.hide {
                 if let Event::DeviceEvent { ref event, .. } = *event {
                     if let DeviceEvent::MouseMotion { delta: (x, y) } = *event {
                         for (transform, _) in (&mut transforms, &cameras).join() {

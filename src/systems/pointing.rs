@@ -197,7 +197,11 @@ impl<'s> System<'s> for PointingSystem {
         (entities, cameras, mut physics_world, transforms, physics_bodies, input, grabbables, time): Self::SystemData,
     ) {
         let is_left_click = input.mouse_button_is_down(MouseButton::Left);
-        match (is_left_click, self.selected_object.is_some(), self.did_release_click) {
+        match (
+            is_left_click,
+            self.selected_object.is_some(),
+            self.did_release_click,
+        ) {
             (true, true, false) | (false, true, _) => {
                 self.move_selected_object(
                     &cameras,
@@ -207,7 +211,7 @@ impl<'s> System<'s> for PointingSystem {
                     &time,
                 );
                 self.did_release_click = !is_left_click;
-            },
+            }
             (true, false, true) => {
                 self.did_release_click = false;
                 self.grab_object(
