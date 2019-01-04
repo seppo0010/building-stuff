@@ -36,6 +36,7 @@ struct SelectedObject {
 #[derive(Default)]
 pub struct PointingSystem {
     selected_object: Option<SelectedObject>,
+    did_release_click: bool,
 }
 
 impl PointingSystem {
@@ -196,24 +197,34 @@ impl<'s> System<'s> for PointingSystem {
         (entities, cameras, mut physics_world, transforms, physics_bodies, input, grabbables, time): Self::SystemData,
     ) {
         let is_left_click = input.mouse_button_is_down(MouseButton::Left);
-        match (is_left_click, self.selected_object.is_some()) {
-            (true, true) => self.move_selected_object(
-                &cameras,
-                &transforms,
-                &physics_bodies,
-                &mut physics_world,
-                &time,
-            ),
-            (true, false) => self.grab_object(
-                &entities,
-                &cameras,
-                &mut physics_world,
-                &transforms,
-                &physics_bodies,
-                &grabbables,
-            ),
-            (false, true) => self.drop_object(&mut physics_world),
-            (false, false) => (),
+        match (is_left_click, self.selected_object.is_some(), self.did_release_click) {
+            (true, true, false) | (false, true, _) => {
+                self.move_selected_object(
+                    &cameras,
+                    &transforms,
+                    &physics_bodies,
+                    &mut physics_world,
+                    &time,
+                );
+                self.did_release_click = !is_left_click;
+            },
+            (true, false, true) => {
+                self.did_release_click = false;
+                self.grab_object(
+                    &entities,
+                    &cameras,
+                    &mut physics_world,
+                    &transforms,
+                    &physics_bodies,
+                    &grabbables,
+                );
+            },
+            (true, true, true) => {
+                self.did_release_click = false;
+                self.drop_object(&mut physics_world);
+            },
+            (true, false, false) => (),
+            (false, false, _) => self.did_release_click = true,
         }
     }
 }
