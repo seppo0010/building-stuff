@@ -218,11 +218,11 @@ impl<'s> System<'s> for PointingSystem {
                     &physics_bodies,
                     &grabbables,
                 );
-            },
+            }
             (true, true, true) => {
                 self.did_release_click = false;
                 self.drop_object(&mut physics_world);
-            },
+            }
             (true, false, false) => (),
             (false, false, _) => self.did_release_click = true,
         }
