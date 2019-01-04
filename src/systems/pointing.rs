@@ -10,16 +10,18 @@ use amethyst::{
     ecs::{Join, Read, ReadStorage, System, Write, WriteStorage},
     input::InputHandler,
     renderer::{Camera, MouseButton},
+    shrev::{EventChannel, ReaderId},
 };
 
-use na::{Isometry3, Point3, Vector3 as PhysicsVector3};
+use na::{Isometry3, Point3, UnitQuaternion, Vector3 as PhysicsVector3};
 
 use ncollide3d::query::{Ray, RayCast};
 use nphysics3d::{
     force_generator::{ConstantAcceleration, ForceGeneratorHandle},
     object::RigidBody,
 };
-use specs::{Entities, Entity};
+use specs::{prelude::Resources, Entities, Entity};
+use winit::{DeviceEvent, Event};
 
 const MAGIC_ANGULAR_VELOCITY_MULTIPLIER: f32 = 50.0;
 const MAX_TOI_GRAB: f32 = 4.0;
@@ -37,6 +39,7 @@ struct SelectedObject {
 pub struct PointingSystem {
     selected_object: Option<SelectedObject>,
     did_release_click: bool,
+    event_reader: Option<ReaderId<Event>>,
 }
 
 impl PointingSystem {
@@ -189,13 +192,52 @@ type PointingSystemData<'s> = (
     Read<'s, InputHandler<String, String>>,
     ReadStorage<'s, Grabbable>,
     Read<'s, Time>,
+    Read<'s, EventChannel<Event>>,
 );
+
 impl<'s> System<'s> for PointingSystem {
     type SystemData = PointingSystemData<'s>;
     fn run(
         &mut self,
-        (entities, cameras, mut physics_world, transforms, physics_bodies, input, grabbables, time): Self::SystemData,
+        (
+            entities,
+            cameras,
+            mut physics_world,
+            transforms,
+            physics_bodies,
+            input,
+            grabbables,
+            time,
+            events,
+        ): Self::SystemData,
     ) {
+        for event in events.read(
+            &mut self
+                .event_reader
+                .as_mut()
+                .expect("`PointingSystem::setup` was not called before `PointingSystem::run`"),
+        ) {
+            if input.mouse_button_is_down(MouseButton::Right) {
+                if let Event::DeviceEvent { ref event, .. } = *event {
+                    if let DeviceEvent::MouseMotion { delta: (x, y) } = *event {
+                        if let Some(ref mut so) = self.selected_object {
+                            let q = UnitQuaternion::from_axis_angle(
+                                &Vector3::y_axis(),
+                                (-x as f32 * 0.2).to_radians(),
+                            )
+                            .inverse()
+                                * UnitQuaternion::from_axis_angle(
+                                    &Vector3::x_axis(),
+                                    (-y as f32 * 0.2).to_radians(),
+                                )
+                                .inverse();
+                            so.box_forward = q * so.box_forward;
+                            so.box_up = q * so.box_up;
+                        }
+                    }
+                }
+            }
+        }
         let is_left_click = input.mouse_button_is_down(MouseButton::Left);
         match (
             is_left_click,
@@ -230,5 +272,12 @@ impl<'s> System<'s> for PointingSystem {
             (true, false, false) => (),
             (false, false, _) => self.did_release_click = true,
         }
+    }
+
+    fn setup(&mut self, res: &mut Resources) {
+        use amethyst::core::specs::prelude::SystemData;
+
+        Self::SystemData::setup(res);
+        self.event_reader = Some(res.fetch_mut::<EventChannel<Event>>().register_reader());
     }
 }
