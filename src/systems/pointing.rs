@@ -86,6 +86,18 @@ impl PointingSystem {
             .map(|(e, _, toi)| (e, toi))
     }
 
+    fn get_selected_object_rigid_body<'a>(
+        &self,
+        physics_bodies: &WriteStorage<PhysicsBody>,
+        world: &'a Write<MyWorld>,
+    ) -> Option<&'a RigidBody<f32>> {
+        self.selected_object
+            .as_ref()
+            .and_then(|so| physics_bodies.get(so.entity))
+            .and_then(|body| world.collider_body_handle(body.0))
+            .and_then(move |bh| world.rigid_body(bh))
+    }
+
     fn get_selected_object_rigid_body_mut<'a>(
         &mut self,
         physics_bodies: &WriteStorage<PhysicsBody>,
@@ -220,19 +232,23 @@ impl<'s> System<'s> for PointingSystem {
             if input.mouse_button_is_down(MouseButton::Right) {
                 if let Event::DeviceEvent { ref event, .. } = *event {
                     if let DeviceEvent::MouseMotion { delta: (x, y) } = *event {
-                        if let Some(ref mut so) = self.selected_object {
-                            let q = UnitQuaternion::from_axis_angle(
-                                &Vector3::y_axis(),
-                                (-x as f32 * 0.2).to_radians(),
-                            )
-                            .inverse()
-                                * UnitQuaternion::from_axis_angle(
-                                    &Vector3::x_axis(),
-                                    (-y as f32 * 0.2).to_radians(),
+                        if let Some(body) =
+                            self.get_selected_object_rigid_body(&physics_bodies, &physics_world)
+                        {
+                            if let Some(ref mut so) = self.selected_object {
+                                let q = UnitQuaternion::from_axis_angle(
+                                    &(body.position().rotation.inverse() * Vector3::y_axis()),
+                                    (-x as f32 * 0.2).to_radians(),
                                 )
-                                .inverse();
-                            so.box_forward = q * so.box_forward;
-                            so.box_up = q * so.box_up;
+                                .inverse()
+                                    * UnitQuaternion::from_axis_angle(
+                                        &(body.position().rotation.inverse() * Vector3::x_axis()),
+                                        (-y as f32 * 0.2).to_radians(),
+                                    )
+                                    .inverse();
+                                so.box_forward = q * so.box_forward;
+                                so.box_up = q * so.box_up;
+                            }
                         }
                     }
                 }
