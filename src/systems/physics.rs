@@ -23,11 +23,11 @@ impl<'s> System<'s> for PhysicsSystem {
         self.time_accumulator += time.delta_seconds();
         let timestep = physics_world.timestep();
         for _ in 0..MAX_STEPS_PER_RUN {
-            physics_world.step();
-            self.time_accumulator -= timestep;
             if self.time_accumulator < timestep {
                 break;
             }
+            physics_world.step();
+            self.time_accumulator -= timestep;
         }
         for (mut t, body) in (&mut transforms, &bodies).join() {
             if let Some(pos) = physics_world
