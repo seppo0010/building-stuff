@@ -16,11 +16,15 @@ use amethyst::{
 };
 pub struct TranslationSystem {
     speed: f32,
+    speed_running: f32,
 }
 
 impl Default for TranslationSystem {
     fn default() -> Self {
-        TranslationSystem { speed: 1.0 }
+        TranslationSystem {
+            speed: 1.0,
+            speed_running: 5.0,
+        }
     }
 }
 
@@ -77,7 +81,12 @@ impl<'s> System<'s> for TranslationSystem {
                                 .collider_body_handle(body.0)
                                 .and_then(|bh| world.rigid_body_mut(bh))
                             {
-                                rb.set_linear_velocity(linear * self.speed);
+                                let speed = if input.key_is_down(winit::VirtualKeyCode::LShift) {
+                                    self.speed_running
+                                } else {
+                                    self.speed
+                                };
+                                rb.set_linear_velocity(linear * speed);
                                 let pos = rb.position().translation.vector;
                                 iso.translation.vector = Vector3::new(pos.x, h, pos.z);
                             }
