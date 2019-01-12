@@ -223,6 +223,7 @@ impl<'s> System<'s> for PointingSystem {
             events,
         ): Self::SystemData,
     ) {
+        let camera_isometry = (&cameras, &transforms).join().next().unwrap().1.isometry();
         for event in events.read(
             &mut self
                 .event_reader
@@ -237,12 +238,16 @@ impl<'s> System<'s> for PointingSystem {
                         {
                             if let Some(ref mut so) = self.selected_object {
                                 let q = UnitQuaternion::from_axis_angle(
-                                    &(body.position().rotation.inverse() * Vector3::y_axis()),
+                                    &(body.position().rotation.inverse()
+                                        * camera_isometry.rotation
+                                        * Vector3::y_axis()),
                                     (-x as f32 * 0.2).to_radians(),
                                 )
                                 .inverse()
                                     * UnitQuaternion::from_axis_angle(
-                                        &(body.position().rotation.inverse() * Vector3::x_axis()),
+                                        &(body.position().rotation.inverse()
+                                            * camera_isometry.rotation
+                                            * Vector3::x_axis()),
                                         (-y as f32 * 0.2).to_radians(),
                                     )
                                     .inverse();
