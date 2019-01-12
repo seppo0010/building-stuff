@@ -33,6 +33,8 @@ use nphysics3d::{
 };
 const COLLIDER_MARGIN: f32 = 0.01;
 const CAMERA_HEIGHT: f32 = 1.8;
+const INITIAL_CAMERA_X: f32 = 8.0;
+const INITIAL_CAMERA_Z: f32 = 4.0;
 
 #[derive(Default)]
 pub struct GameState {
@@ -199,7 +201,7 @@ impl GameState {
         let center_of_mass = aabb.center();
 
         let pos = Isometry3::new(
-            PhysicsVector3::new(0.0, CAMERA_HEIGHT / 2.0, 0.0),
+            PhysicsVector3::new(INITIAL_CAMERA_X, CAMERA_HEIGHT / 2.0, INITIAL_CAMERA_Z),
             Vector3::new(0.0, 1.0, 0.0),
         );
         let handle = physics_world.add_rigid_body(pos, inertia, center_of_mass);
@@ -225,9 +227,9 @@ impl GameState {
     }
     fn create_camera(&mut self, world: &mut World) {
         let mut t = Transform::default();
-        *t.translation_mut() = Vector3::new(0.0, CAMERA_HEIGHT, 0.0);
+        *t.translation_mut() = Vector3::new(INITIAL_CAMERA_X, CAMERA_HEIGHT, INITIAL_CAMERA_Z);
         *t.rotation_mut() = UnitQuaternion::new_observer_frame(
-            &Vector3::new(0.0, 0.0, -1.0),
+            &Vector3::new(1.0, 0.0, 0.0),
             &Vector3::new(0.0, 1.0, 0.0),
         );
         let c = Camera::from(Projection::perspective(1.3, f32::consts::FRAC_PI_3));
