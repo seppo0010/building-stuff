@@ -9,7 +9,7 @@ use amethyst::{
     core::{nalgebra::Vector3, timing::Time, Transform},
     ecs::{Join, Read, ReadStorage, System, Write, WriteStorage},
     input::InputHandler,
-    renderer::{Camera, MouseButton},
+    renderer::{Camera, Material, MouseButton},
     shrev::{EventChannel, ReaderId},
 };
 
@@ -63,27 +63,29 @@ impl PointingSystem {
         )
     }
 
-    fn find_pointed_object(
+    fn find_pointed_object<'a>(
         &self,
         ray: &Ray<f32>,
         entities: &Entities,
         physics_world: &Write<MyWorld>,
         physics_bodies: &WriteStorage<PhysicsBody>,
-        grabbables: &ReadStorage<Grabbable>,
-    ) -> Option<(Entity, f32)> {
+        grabbables: &'a ReadStorage<Grabbable>,
+    ) -> Option<(Entity, &'a Grabbable, f32)> {
         (entities, physics_bodies, grabbables)
             .join()
-            .flat_map(|(e, b, _)| {
+            .flat_map(|(e, b, g)| {
                 let co = physics_world
                     .collision_world()
                     .collision_object(b.0)
                     .unwrap();
                 co.shape()
                     .toi_with_ray(co.position(), &ray, true)
-                    .map(|x| (e, b, x))
+                    .map(|x| (e, b, x, g))
             })
-            .min_by(|(_, _, toi1), (_, _, toi2)| toi1.partial_cmp(&toi2).unwrap_or(Ordering::Equal))
-            .map(|(e, _, toi)| (e, toi))
+            .min_by(|(_, _, toi1, _), (_, _, toi2, _)| {
+                toi1.partial_cmp(&toi2).unwrap_or(Ordering::Equal)
+            })
+            .map(|(e, _, toi, g)| (e, g, toi))
     }
 
     fn get_selected_object_rigid_body<'a>(
@@ -146,13 +148,14 @@ impl PointingSystem {
         transforms: &ReadStorage<Transform>,
         physics_bodies: &WriteStorage<PhysicsBody>,
         grabbables: &ReadStorage<Grabbable>,
+        materials: &mut WriteStorage<Material>,
     ) {
         let (ray, camera_isometry) = self.find_current_ray(&cameras, &transforms);
 
         self.selected_object = self
             .find_pointed_object(&ray, entities, &physics_world, physics_bodies, grabbables)
-            .filter(|(_, toi)| *toi < MAX_TOI_GRAB)
-            .map(|(entity, toi)| {
+            .filter(|(_, _, toi)| *toi < MAX_TOI_GRAB)
+            .map(|(entity, g, toi)| {
                 let mut f = ConstantAcceleration::new(
                     -physics_world.gravity(),
                     Vector3::new(0.0, 0.0, 0.0),
@@ -163,9 +166,9 @@ impl PointingSystem {
                         .collider_body_handle(physics_bodies.get(entity).unwrap().0)
                         .unwrap(),
                 );
-                (entity, physics_world.add_force_generator(f), toi)
+                (entity, physics_world.add_force_generator(f), toi, g)
             })
-            .map(|(entity, antig, toi)| {
+            .map(|(entity, antig, toi, g)| {
                 let rot_inv = physics_world
                     .rigid_body(
                         physics_world
@@ -176,6 +179,9 @@ impl PointingSystem {
                     .position()
                     .rotation
                     .inverse();
+                materials
+                    .insert(entity, g.selected_material.clone())
+                    .unwrap();
                 SelectedObject {
                     entity,
                     previous_camera_position: camera_isometry,
@@ -187,9 +193,20 @@ impl PointingSystem {
             });
     }
 
-    fn drop_object(&mut self, physics_world: &mut Write<MyWorld>) {
+    fn drop_object(
+        &mut self,
+        physics_world: &mut Write<MyWorld>,
+        grabbables: &ReadStorage<Grabbable>,
+        materials: &mut WriteStorage<Material>,
+    ) {
         if let Some(ref so) = self.selected_object {
             physics_world.remove_force_generator(so.force);
+            materials
+                .insert(
+                    so.entity,
+                    grabbables.get(so.entity).unwrap().default_material.clone(),
+                )
+                .unwrap();
         }
         self.selected_object = None;
     }
@@ -205,6 +222,7 @@ type PointingSystemData<'s> = (
     ReadStorage<'s, Grabbable>,
     Read<'s, Time>,
     Read<'s, EventChannel<Event>>,
+    WriteStorage<'s, Material>,
 );
 
 impl<'s> System<'s> for PointingSystem {
@@ -221,6 +239,7 @@ impl<'s> System<'s> for PointingSystem {
             grabbables,
             time,
             events,
+            mut materials,
         ): Self::SystemData,
     ) {
         let camera_isometry = (&cameras, &transforms).join().next().unwrap().1.isometry();
@@ -284,11 +303,12 @@ impl<'s> System<'s> for PointingSystem {
                     &transforms,
                     &physics_bodies,
                     &grabbables,
+                    &mut materials,
                 );
             }
             (true, true, true) => {
                 self.did_release_click = false;
-                self.drop_object(&mut physics_world);
+                self.drop_object(&mut physics_world, &grabbables, &mut materials);
             }
             (true, false, false) => (),
             (false, false, _) => self.did_release_click = true,

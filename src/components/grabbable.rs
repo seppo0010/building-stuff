@@ -1,6 +1,13 @@
-use amethyst::ecs::{Component, FlaggedStorage};
+use amethyst::{
+    ecs::{Component, VecStorage},
+    renderer::Material,
+};
 
-pub struct Grabbable;
+pub struct Grabbable {
+    pub default_material: Material,
+    pub selected_material: Material,
+}
+
 impl Component for Grabbable {
-    type Storage = FlaggedStorage<Self>;
+    type Storage = VecStorage<Self>;
 }

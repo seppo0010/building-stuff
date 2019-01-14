@@ -6,7 +6,7 @@ use crate::{
 };
 
 use amethyst::{
-    assets::{Loader, ProgressCounter},
+    assets::{AssetStorage, Loader, ProgressCounter},
     core::{
         nalgebra::{UnitQuaternion, Vector3},
         Transform,
@@ -14,7 +14,7 @@ use amethyst::{
     prelude::*,
     renderer::{
         AmbientColor, Camera, DirectionalLight, Light, Material, MaterialDefaults, MeshHandle,
-        PosNormTex, Projection, Rgba, Shape,
+        PosNormTex, Projection, Rgba, Shape, Texture,
     },
     ui::UiCreator,
     utils::application_root_dir,
@@ -35,11 +35,17 @@ const COLLIDER_MARGIN: f32 = 0.01;
 const CAMERA_HEIGHT: f32 = 1.8;
 const INITIAL_CAMERA_X: f32 = 8.0;
 const INITIAL_CAMERA_Z: f32 = 4.0;
+const COLORS: [[f32; 4]; 5] = [
+    [0.0, 1.0, 0.0, 1.0],
+    [1.0, 1.0, 0.0, 1.0],
+    [1.0, 0.0, 0.0, 1.0],
+    [1.0, 0.0, 1.0, 1.0],
+    [0.0, 0.0, 1.0, 1.0],
+];
 
 #[derive(Default)]
 pub struct GameState {
     pub cube_mesh: Option<MeshHandle>,
-    pub cube_materials: Vec<Material>,
 }
 
 impl GameState {
@@ -71,25 +77,10 @@ impl GameState {
 
     fn prepare_cubes(&mut self, world: &mut World) {
         let mesh_storage = world.read_resource();
-        let tex_storage = world.read_resource();
         let mut progress = ProgressCounter::default();
         let loader = world.read_resource::<Loader>();
         let mesh_data = Shape::Cube.generate::<Vec<PosNormTex>>(None);
         self.cube_mesh = Some(loader.load_from_data(mesh_data, &mut progress, &mesh_storage));
-        for color in [
-            [0.0, 1.0, 0.0, 1.0],
-            [1.0, 1.0, 0.0, 1.0],
-            [1.0, 0.0, 0.0, 1.0],
-            [1.0, 0.0, 1.0, 1.0],
-            [0.0, 0.0, 1.0, 1.0],
-        ]
-        .into_iter()
-        {
-            self.cube_materials.push(Material {
-                albedo: loader.load_from_data((*color).into(), &mut progress, &tex_storage),
-                ..world.read_resource::<MaterialDefaults>().0.clone()
-            });
-        }
     }
 
     fn create_cube(&mut self, world: &mut World, i: usize, physics_world: &mut MyWorld) {
@@ -122,14 +113,28 @@ impl GameState {
             PhysicsMaterial::default(),
         );
 
+        let grabbable = {
+            let loader = world.read_resource::<Loader>();
+            let tex_storage = world.read_resource::<AssetStorage<Texture>>();
+            Grabbable {
+                default_material: Material {
+                    albedo: loader.load_from_data(COLORS[i].into(), (), &tex_storage),
+                    ..world.read_resource::<MaterialDefaults>().0.clone()
+                },
+                selected_material: Material {
+                    metallic: loader.load_from_data(COLORS[i].into(), (), &tex_storage),
+                    ..world.read_resource::<MaterialDefaults>().0.clone()
+                },
+            }
+        };
         world
             .create_entity()
             .named(format!("box{}", i))
             .with(t)
             .with(self.cube_mesh.clone().unwrap())
-            .with(self.cube_materials[i].clone())
+            .with(grabbable.default_material.clone())
             .with(PhysicsBody(body_handle))
-            .with(Grabbable)
+            .with(grabbable)
             .build();
     }
 
