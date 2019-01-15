@@ -20,11 +20,11 @@ use amethyst::{
     utils::application_root_dir,
 };
 
-use na::{Isometry3, Point3, Vector3 as PhysicsVector3};
+use na::{Isometry3, Vector3 as PhysicsVector3};
 
 use ncollide3d::{
     bounding_volume::{HasBoundingVolume, AABB},
-    shape::{Cuboid, Cylinder, ShapeHandle, TriMesh},
+    shape::{ConvexHull, Cuboid, Cylinder, ShapeHandle},
     transformation::ToTriMesh,
 };
 use nphysics3d::{
@@ -184,24 +184,9 @@ impl GameState {
     fn create_self(&mut self, world: &mut World, physics_world: &mut MyWorld) {
         // this is a bit strange, but ncollide has two different TriMesh that are quite similar
         let cylinder = Cylinder::new(CAMERA_HEIGHT / 2.0, 0.75);
-        let mut t = cylinder.to_trimesh(10);
-        t.unify_index_buffer();
         let aabb: AABB<f32> = cylinder.bounding_volume(&Isometry3::identity());
-        let geom = ShapeHandle::new(TriMesh::new(
-            t.coords,
-            t.indices
-                .unwrap_unified()
-                .into_iter()
-                .map(|p| {
-                    Point3::new(
-                        p.coords.x as usize,
-                        p.coords.y as usize,
-                        p.coords.z as usize,
-                    )
-                })
-                .collect(),
-            t.uvs,
-        ));
+        let t = cylinder.to_trimesh(10);
+        let geom = ShapeHandle::new(ConvexHull::try_from_points(&t.coords).unwrap());
         let inertia = Cuboid::new(aabb.half_extents()).inertia(1.0);
         let center_of_mass = aabb.center();
 
