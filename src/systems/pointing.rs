@@ -210,6 +210,36 @@ impl PointingSystem {
         }
         self.selected_object = None;
     }
+
+    fn rotate_selected_object<'a>(
+        &mut self,
+        physics_bodies: &WriteStorage<PhysicsBody>,
+        physics_world: &'a Write<MyWorld>,
+        camera_isometry: &Isometry3<f32>,
+        x: f64,
+        y: f64,
+    ) {
+        if let Some(body) = self.get_selected_object_rigid_body(&physics_bodies, &physics_world) {
+            if let Some(ref mut so) = self.selected_object {
+                let q = UnitQuaternion::from_axis_angle(
+                    &(body.position().rotation.inverse()
+                        * camera_isometry.rotation
+                        * Vector3::y_axis()),
+                    (-x as f32 * 0.2).to_radians(),
+                )
+                .inverse()
+                    * UnitQuaternion::from_axis_angle(
+                        &(body.position().rotation.inverse()
+                            * camera_isometry.rotation
+                            * Vector3::x_axis()),
+                        (-y as f32 * 0.2).to_radians(),
+                    )
+                    .inverse();
+                so.box_forward = q * so.box_forward;
+                so.box_up = q * so.box_up;
+            }
+        }
+    }
 }
 
 type PointingSystemData<'s> = (
@@ -252,28 +282,13 @@ impl<'s> System<'s> for PointingSystem {
             if input.mouse_button_is_down(MouseButton::Right) {
                 if let Event::DeviceEvent { ref event, .. } = *event {
                     if let DeviceEvent::MouseMotion { delta: (x, y) } = *event {
-                        if let Some(body) =
-                            self.get_selected_object_rigid_body(&physics_bodies, &physics_world)
-                        {
-                            if let Some(ref mut so) = self.selected_object {
-                                let q = UnitQuaternion::from_axis_angle(
-                                    &(body.position().rotation.inverse()
-                                        * camera_isometry.rotation
-                                        * Vector3::y_axis()),
-                                    (-x as f32 * 0.2).to_radians(),
-                                )
-                                .inverse()
-                                    * UnitQuaternion::from_axis_angle(
-                                        &(body.position().rotation.inverse()
-                                            * camera_isometry.rotation
-                                            * Vector3::x_axis()),
-                                        (-y as f32 * 0.2).to_radians(),
-                                    )
-                                    .inverse();
-                                so.box_forward = q * so.box_forward;
-                                so.box_up = q * so.box_up;
-                            }
-                        }
+                        self.rotate_selected_object(
+                            &physics_bodies,
+                            &physics_world,
+                            &camera_isometry,
+                            x,
+                            y,
+                        );
                     }
                 }
             }
