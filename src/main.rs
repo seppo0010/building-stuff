@@ -13,7 +13,7 @@ mod systems;
 
 use crate::{
     game_state::GameState,
-    systems::{MoveSystem, PhysicsSystem, RotationSystem, TranslationSystem},
+    systems::{MergeSystem, MovingSystem, PhysicsSystem, RotationSystem, TranslationSystem},
 };
 
 use amethyst::{
@@ -58,10 +58,11 @@ fn main() -> amethyst::Result<()> {
         .with(MouseFocusUpdateSystem::new(), "mouse_focus", &[])
         .with(CursorHideSystem::new(), "cursor_hide", &["mouse_focus"])
         .with(
-            MoveSystem::default(),
-            "move_system",
+            MergeSystem::default(),
+            "merge_system",
             &["rotation_system", "translation_system"],
         )
+        .with(MovingSystem::default(), "move_system", &["merge_system"])
         .with(PhysicsSystem::default(), "physics_system", &["move_system"]);
     let mut game = Application::new("./", GameState::default(), game_data)?;
 
