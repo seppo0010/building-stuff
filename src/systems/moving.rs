@@ -36,13 +36,13 @@ struct SelectedObject {
 }
 
 #[derive(Default)]
-pub struct PointingSystem {
+pub struct MoveSystem {
     selected_object: Option<SelectedObject>,
     did_release_click: bool,
     event_reader: Option<ReaderId<Event>>,
 }
 
-impl PointingSystem {
+impl MoveSystem {
     fn find_current_ray(
         &self,
         cameras: &ReadStorage<Camera>,
@@ -242,7 +242,7 @@ impl PointingSystem {
     }
 }
 
-type PointingSystemData<'s> = (
+type MoveSystemData<'s> = (
     Entities<'s>,
     ReadStorage<'s, Camera>,
     Write<'s, MyWorld>,
@@ -255,8 +255,8 @@ type PointingSystemData<'s> = (
     WriteStorage<'s, Material>,
 );
 
-impl<'s> System<'s> for PointingSystem {
-    type SystemData = PointingSystemData<'s>;
+impl<'s> System<'s> for MoveSystem {
+    type SystemData = MoveSystemData<'s>;
     fn run(
         &mut self,
         (
@@ -277,7 +277,7 @@ impl<'s> System<'s> for PointingSystem {
             &mut self
                 .event_reader
                 .as_mut()
-                .expect("`PointingSystem::setup` was not called before `PointingSystem::run`"),
+                .expect("`MoveSystem::setup` was not called before `MoveSystem::run`"),
         ) {
             if input.mouse_button_is_down(MouseButton::Right) {
                 if let Event::DeviceEvent { ref event, .. } = *event {
