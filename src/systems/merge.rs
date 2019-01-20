@@ -20,6 +20,37 @@ pub struct MergeSystem {
     mysensor: Option<SensorHandle>,
 }
 
+impl MergeSystem {
+    fn create_sensor<'s>(
+        &mut self,
+        physics_world: &mut Write<'s, MyWorld>,
+        cameras: &ReadStorage<'s, Camera>,
+        transforms: &ReadStorage<'s, Transform>,
+    ) {
+        println!("adding sensor");
+        let camera_isometry = (cameras, transforms).join().next().unwrap().1.isometry();
+
+        // copy paste much? Yes.
+        let cylinder = Cylinder::new(10.0 / 2.0, 0.75);
+        let aabb: AABB<f32> = cylinder.bounding_volume(&Isometry3::identity());
+        let t = cylinder.to_trimesh(10);
+        let geom = ShapeHandle::new(ConvexHull::try_from_points(&t.coords).unwrap());
+        let inertia = Cuboid::new(aabb.half_extents()).inertia(1.0);
+        let center_of_mass = aabb.center();
+
+        let handle = physics_world.add_rigid_body(*camera_isometry, inertia, center_of_mass);
+        self.mysensor = Some(physics_world.add_sensor(geom, handle, Isometry3::identity()));
+    }
+
+    fn remove_sensor<'s>(&mut self, physics_world: &mut Write<'s, MyWorld>) {
+        if let Some(mysensor) = self.mysensor {
+            println!("removing sensor");
+            physics_world.remove_colliders(&[mysensor]);
+            self.mysensor = None;
+        }
+    }
+}
+
 impl<'s> System<'s> for MergeSystem {
     type SystemData = (
         Write<'s, MyWorld>,
@@ -32,25 +63,9 @@ impl<'s> System<'s> for MergeSystem {
             if self.mysensor.is_some() {
                 return;
             }
-            println!("adding sensor");
-            let camera_isometry = (&cameras, &transforms).join().next().unwrap().1.isometry();
-
-            // copy paste much? Yes.
-            let cylinder = Cylinder::new(10.0 / 2.0, 0.75);
-            let aabb: AABB<f32> = cylinder.bounding_volume(&Isometry3::identity());
-            let t = cylinder.to_trimesh(10);
-            let geom = ShapeHandle::new(ConvexHull::try_from_points(&t.coords).unwrap());
-            let inertia = Cuboid::new(aabb.half_extents()).inertia(1.0);
-            let center_of_mass = aabb.center();
-
-            let handle = physics_world.add_rigid_body(*camera_isometry, inertia, center_of_mass);
-            self.mysensor = Some(physics_world.add_sensor(geom, handle, Isometry3::identity()));
+            self.create_sensor(&mut physics_world, &cameras, &transforms);
         } else {
-            if let Some(mysensor) = self.mysensor {
-                println!("removing sensor");
-                physics_world.remove_colliders(&[mysensor]);
-                self.mysensor = None;
-            }
+            self.remove_sensor(&mut physics_world);
         }
     }
 }
