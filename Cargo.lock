@@ -465,8 +465,10 @@ name = "building-stuff"
 version = "0.1.0"
 dependencies = [
  "amethyst 0.10.0",
+ "nalgebra 0.17.0",
  "ncollide3d 0.18.1 (registry+https://github.com/rust-lang/crates.io-index)",
  "nphysics3d 0.10.1 (registry+https://github.com/rust-lang/crates.io-index)",
+ "nphysics_testbed3d 0.4.1 (registry+https://github.com/rust-lang/crates.io-index)",
  "specs 0.14.3 (registry+https://github.com/rust-lang/crates.io-index)",
  "winit 0.18.1",
 ]
@@ -1218,6 +1220,14 @@ dependencies = [
 ]
 
 [[package]]
+name = "gl"
+version = "0.11.0"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+dependencies = [
+ "gl_generator 0.10.0 (registry+https://github.com/rust-lang/crates.io-index)",
+]
+
+[[package]]
 name = "gl_generator"
 version = "0.9.0"
 source = "registry+https://github.com/rust-lang/crates.io-index"
@@ -1432,6 +1442,26 @@ source = "registry+https://github.com/rust-lang/crates.io-index"
 name = "khronos_api"
 version = "3.0.0"
 source = "registry+https://github.com/rust-lang/crates.io-index"
+
+[[package]]
+name = "kiss3d"
+version = "0.18.0"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+dependencies = [
+ "bitflags 1.0.4 (registry+https://github.com/rust-lang/crates.io-index)",
+ "gl 0.11.0 (registry+https://github.com/rust-lang/crates.io-index)",
+ "glutin 0.19.0 (registry+https://github.com/rust-lang/crates.io-index)",
+ "image 0.21.0 (registry+https://github.com/rust-lang/crates.io-index)",
+ "libc 0.2.48 (registry+https://github.com/rust-lang/crates.io-index)",
+ "nalgebra 0.17.0",
+ "ncollide3d 0.18.1 (registry+https://github.com/rust-lang/crates.io-index)",
+ "num-traits 0.2.6 (registry+https://github.com/rust-lang/crates.io-index)",
+ "rusttype 0.7.4 (registry+https://github.com/rust-lang/crates.io-index)",
+ "serde 1.0.87 (registry+https://github.com/rust-lang/crates.io-index)",
+ "serde_derive 1.0.87 (registry+https://github.com/rust-lang/crates.io-index)",
+ "stdweb 0.4.13 (registry+https://github.com/rust-lang/crates.io-index)",
+ "stdweb-derive 0.5.1 (registry+https://github.com/rust-lang/crates.io-index)",
+]
 
 [[package]]
 name = "laminar"
@@ -1742,6 +1772,20 @@ dependencies = [
  "num-traits 0.2.6 (registry+https://github.com/rust-lang/crates.io-index)",
  "slab 0.4.2 (registry+https://github.com/rust-lang/crates.io-index)",
  "stdweb 0.4.13 (registry+https://github.com/rust-lang/crates.io-index)",
+ "time 0.1.42 (registry+https://github.com/rust-lang/crates.io-index)",
+]
+
+[[package]]
+name = "nphysics_testbed3d"
+version = "0.4.1"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+dependencies = [
+ "kiss3d 0.18.0 (registry+https://github.com/rust-lang/crates.io-index)",
+ "nalgebra 0.17.0",
+ "ncollide3d 0.18.1 (registry+https://github.com/rust-lang/crates.io-index)",
+ "nphysics3d 0.10.1 (registry+https://github.com/rust-lang/crates.io-index)",
+ "num-traits 0.2.6 (registry+https://github.com/rust-lang/crates.io-index)",
+ "rand 0.6.5 (registry+https://github.com/rust-lang/crates.io-index)",
  "time 0.1.42 (registry+https://github.com/rust-lang/crates.io-index)",
 ]
 
@@ -3129,6 +3173,7 @@ source = "registry+https://github.com/rust-lang/crates.io-index"
 "checksum gfx_macros 0.2.1 (registry+https://github.com/rust-lang/crates.io-index)" = "d38f9e1d3f4705b26e73437e35fd71c955aba5781f6bb5391d37a166204d301f"
 "checksum gfx_window_glutin 0.27.0 (registry+https://github.com/rust-lang/crates.io-index)" = "0cc55ad547b1d846f7cd2aa4c864c35725f9f5502cacb2535043343646a87003"
 "checksum gif 0.10.1 (registry+https://github.com/rust-lang/crates.io-index)" = "dd4bca55ac1f213920ce3527ccd62386f1f15fa3f1714aeee1cf93f2c416903f"
+"checksum gl 0.11.0 (registry+https://github.com/rust-lang/crates.io-index)" = "d7d8c8e25e8ed44d4813809205090162723a866fb4be3a9d8bb983c9a0bf98f1"
 "checksum gl_generator 0.10.0 (registry+https://github.com/rust-lang/crates.io-index)" = "a0ffaf173cf76c73a73e080366bf556b4776ece104b06961766ff11449f38604"
 "checksum gl_generator 0.9.0 (registry+https://github.com/rust-lang/crates.io-index)" = "7a795170cbd85b5a7baa58d6d7525cae6a03e486859860c220f7ebbbdd379d0a"
 "checksum gleam 0.6.8 (registry+https://github.com/rust-lang/crates.io-index)" = "4b47f5b15742aee359c7895ab98cf2cceecc89bb4feb6f4e42f802d7899877da"
@@ -3152,6 +3197,7 @@ source = "registry+https://github.com/rust-lang/crates.io-index"
 "checksum kernel32-sys 0.2.2 (registry+https://github.com/rust-lang/crates.io-index)" = "7507624b29483431c0ba2d82aece8ca6cdba9382bff4ddd0f7490560c056098d"
 "checksum khronos_api 2.2.0 (registry+https://github.com/rust-lang/crates.io-index)" = "037ab472c33f67b5fbd3e9163a2645319e5356fcd355efa6d4eb7fff4bbcb554"
 "checksum khronos_api 3.0.0 (registry+https://github.com/rust-lang/crates.io-index)" = "62237e6d326bd5871cd21469323bf096de81f1618cd82cbaf5d87825335aeb49"
+"checksum kiss3d 0.18.0 (registry+https://github.com/rust-lang/crates.io-index)" = "182f0d91728fbd43e61c1adccdfc8576d1d1508f254137cb5298469ca4734c80"
 "checksum laminar 0.1.0 (registry+https://github.com/rust-lang/crates.io-index)" = "3c54d6f646a425f9383f6b67dcfc73f159447c08bcfdd16318ac09f31240015f"
 "checksum lazy_static 1.2.0 (registry+https://github.com/rust-lang/crates.io-index)" = "a374c89b9db55895453a74c1e38861d9deec0b01b405a82516e9d5de4820dea1"
 "checksum lewton 0.9.3 (registry+https://github.com/rust-lang/crates.io-index)" = "81d583f12101d36b9c19f85326f3c4e7d3b88d17f1131113e13da056dc0d4437"
@@ -3187,6 +3233,7 @@ source = "registry+https://github.com/rust-lang/crates.io-index"
 "checksum nom 3.2.1 (registry+https://github.com/rust-lang/crates.io-index)" = "05aec50c70fd288702bcd93284a8444607f3292dbdf2a30de5ea5dcdbe72287b"
 "checksum nonzero_signed 1.0.3 (registry+https://github.com/rust-lang/crates.io-index)" = "02783a0482333b0d3f5f5411b8fb60454a596696da041da0470ac9ef3e6e37d8"
 "checksum nphysics3d 0.10.1 (registry+https://github.com/rust-lang/crates.io-index)" = "1e5a351f12e50127a758f536780bf3cbdc40b1663aa6e3a0d5f8f1fe84ce1752"
+"checksum nphysics_testbed3d 0.4.1 (registry+https://github.com/rust-lang/crates.io-index)" = "0eb8235d240a5188fb31347e994144cf3362015fcfd849e9bfafd582a941bd25"
 "checksum num 0.2.0 (registry+https://github.com/rust-lang/crates.io-index)" = "cf4825417e1e1406b3782a8ce92f4d53f26ec055e3622e1881ca8e9f5f9e08db"
 "checksum num-bigint 0.2.2 (registry+https://github.com/rust-lang/crates.io-index)" = "57450397855d951f1a41305e54851b1a7b8f5d2e349543a02a2effe25459f718"
 "checksum num-complex 0.2.1 (registry+https://github.com/rust-lang/crates.io-index)" = "107b9be86cd2481930688277b675b0114578227f034674726605b8a482d8baf8"

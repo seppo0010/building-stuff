@@ -1,7 +1,8 @@
 use nphysics3d::world::World as PhysicsWorld;
 use std::ops::{Deref, DerefMut};
+use std::sync::{Arc, RwLock};
 
-type MyCollisionWorld = PhysicsWorld<f32>;
+type MyCollisionWorld = Box<Arc<RwLock<PhysicsWorld<f32>>>>;
 pub struct MyWorld {
     pub inner: MyCollisionWorld,
 }
@@ -9,21 +10,17 @@ pub struct MyWorld {
 impl Default for MyWorld {
     fn default() -> Self {
         MyWorld {
-            inner: MyCollisionWorld::new(),
+            inner: Box::new(Arc::new(RwLock::new(PhysicsWorld::default()))),
         }
     }
 }
 
-impl Deref for MyWorld {
-    type Target = MyCollisionWorld;
-
-    fn deref(&self) -> &MyCollisionWorld {
-        &self.inner
+impl MyWorld {
+    pub fn get<'a: 'b, 'b>(&'a self) -> Box<Deref<Target = PhysicsWorld<f32>> + 'b> {
+        Box::new(self.inner.read().unwrap())
     }
-}
 
-impl DerefMut for MyWorld {
-    fn deref_mut(&mut self) -> &mut MyCollisionWorld {
-        &mut self.inner
+    pub fn get_mut<'a: 'b, 'b>(&'a mut self) -> Box<DerefMut<Target = PhysicsWorld<f32>> + 'b> {
+        Box::new(self.inner.write().unwrap())
     }
 }

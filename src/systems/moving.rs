@@ -21,6 +21,7 @@ use ncollide3d::query::{Ray, RayCast};
 use nphysics3d::{
     force_generator::{ConstantAcceleration, ForceGeneratorHandle},
     object::RigidBody,
+    world::World as PhysicsWorld,
 };
 use specs::{prelude::Resources, Entities, Entity};
 use winit::{DeviceEvent, Event};
@@ -73,10 +74,11 @@ impl MoveSystem {
         physics_bodies: &WriteStorage<PhysicsBody>,
         grabbables: &'a ReadStorage<Grabbable>,
     ) -> Option<(Entity, &'a Grabbable, f32)> {
+        let world = physics_world.get();
         (entities, physics_bodies, grabbables)
             .join()
             .flat_map(|(e, b, g)| {
-                let co = physics_world
+                let co = world
                     .collider_world()
                     .as_collider_world()
                     .collision_object(b.0)
@@ -94,7 +96,7 @@ impl MoveSystem {
     fn get_selected_object_rigid_body<'a>(
         &self,
         physics_bodies: &WriteStorage<PhysicsBody>,
-        world: &'a Write<MyWorld>,
+        world: &'a PhysicsWorld<f32>,
     ) -> Option<&'a RigidBody<f32>> {
         self.selected_object
             .as_ref()
@@ -106,7 +108,7 @@ impl MoveSystem {
     fn get_selected_object_rigid_body_mut<'a>(
         &mut self,
         physics_bodies: &WriteStorage<PhysicsBody>,
-        world: &'a mut Write<MyWorld>,
+        world: &'a mut PhysicsWorld<f32>,
     ) -> Option<&'a mut RigidBody<f32>> {
         self.selected_object
             .as_mut()
@@ -120,11 +122,12 @@ impl MoveSystem {
         cameras: &ReadStorage<Camera>,
         transforms: &ReadStorage<Transform>,
         physics_bodies: &WriteStorage<PhysicsBody>,
-        world: &mut Write<MyWorld>,
+        physics_world: &mut Write<MyWorld>,
         time: &Read<Time>,
     ) {
+        let mut world = physics_world.get_mut();
         let camera_isometry = self.find_current_ray(cameras, transforms).1;
-        let rb = match self.get_selected_object_rigid_body_mut(physics_bodies, world) {
+        let rb = match self.get_selected_object_rigid_body_mut(physics_bodies, &mut world) {
             Some(x) => x,
             None => return,
         };
@@ -160,22 +163,30 @@ impl MoveSystem {
             .filter(|(_, _, toi)| *toi < MAX_TOI_GRAB)
             .map(|(entity, g, toi)| {
                 let mut f = ConstantAcceleration::new(
-                    -physics_world.gravity(),
+                    -physics_world.get().gravity(),
                     Vector3::new(0.0, 0.0, 0.0),
                 );
                 // this is awful
                 f.add_body_part(
                     physics_world
+                        .get()
                         .collider(physics_bodies.get(entity).unwrap().0)
                         .unwrap()
                         .body_part(0),
                 );
-                (entity, physics_world.add_force_generator(f), toi, g)
+                (
+                    entity,
+                    physics_world.get_mut().add_force_generator(f),
+                    toi,
+                    g,
+                )
             })
             .map(|(entity, antig, toi, g)| {
                 let rot_inv = physics_world
+                    .get()
                     .rigid_body(
                         physics_world
+                            .get()
                             .collider_body_handle(physics_bodies.get(entity).unwrap().0)
                             .unwrap(),
                     )
@@ -204,7 +215,7 @@ impl MoveSystem {
         materials: &mut WriteStorage<Material>,
     ) {
         if let Some(ref so) = self.selected_object {
-            physics_world.remove_force_generator(so.force);
+            physics_world.get_mut().remove_force_generator(so.force);
             materials
                 .insert(
                     so.entity,
@@ -218,12 +229,13 @@ impl MoveSystem {
     fn rotate_selected_object<'a>(
         &mut self,
         physics_bodies: &WriteStorage<PhysicsBody>,
-        physics_world: &'a Write<MyWorld>,
+        physics_world: &'a mut Write<MyWorld>,
         camera_isometry: &Isometry3<f32>,
         x: f64,
         y: f64,
     ) {
-        if let Some(body) = self.get_selected_object_rigid_body(&physics_bodies, &physics_world) {
+        let world = physics_world.get_mut();
+        if let Some(body) = self.get_selected_object_rigid_body(&physics_bodies, &world) {
             if let Some(ref mut so) = self.selected_object {
                 let q = UnitQuaternion::from_axis_angle(
                     &(body.position().rotation.inverse()
@@ -288,7 +300,7 @@ impl<'s> System<'s> for MoveSystem {
                     if let DeviceEvent::MouseMotion { delta: (x, y) } = *event {
                         self.rotate_selected_object(
                             &physics_bodies,
-                            &physics_world,
+                            &mut physics_world,
                             &camera_isometry,
                             x,
                             y,

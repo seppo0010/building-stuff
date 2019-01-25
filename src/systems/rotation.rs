@@ -26,6 +26,28 @@ impl Default for RotationSystem {
     }
 }
 
+impl RotationSystem {
+    fn rotate<'s>(
+        &self,
+        transforms: &mut WriteStorage<'s, Transform>,
+        cameras: &ReadStorage<'s, Camera>,
+        x: f32,
+        y: f32,
+    ) {
+        for (transform, _) in (transforms, cameras).join() {
+            transform.pitch_local((-y as f32 * self.sensitivity_y).to_radians());
+            transform.yaw_global((-x as f32 * self.sensitivity_x).to_radians());
+            // there's probably a better way to do this if you know trigonometry :see_no_evil:
+            while (transform.isometry().rotation * Vector3::z()).y < -0.8 {
+                transform.pitch_local((-1.0_f32).to_radians());
+            }
+            while (transform.isometry().rotation * Vector3::z()).y > 0.8 {
+                transform.pitch_local((1.0_f32).to_radians());
+            }
+        }
+    }
+}
+
 type RotationSystemData<'s> = (
     Read<'s, EventChannel<Event>>,
     WriteStorage<'s, Transform>,
@@ -48,17 +70,7 @@ impl<'s> System<'s> for RotationSystem {
             if !input.mouse_button_is_down(MouseButton::Right) && focus.is_focused && hide.hide {
                 if let Event::DeviceEvent { ref event, .. } = *event {
                     if let DeviceEvent::MouseMotion { delta: (x, y) } = *event {
-                        for (transform, _) in (&mut transforms, &cameras).join() {
-                            transform.pitch_local((-y as f32 * self.sensitivity_y).to_radians());
-                            transform.yaw_global((-x as f32 * self.sensitivity_x).to_radians());
-                            // there's probably a better way to do this if you know trigonometry :see_no_evil:
-                            while (transform.isometry().rotation * Vector3::z()).y < -0.8 {
-                                transform.pitch_local((-1.0_f32).to_radians());
-                            }
-                            while (transform.isometry().rotation * Vector3::z()).y > 0.8 {
-                                transform.pitch_local((1.0_f32).to_radians());
-                            }
-                        }
+                        self.rotate(&mut transforms, &cameras, x as f32, y as f32);
                     }
                 }
             }

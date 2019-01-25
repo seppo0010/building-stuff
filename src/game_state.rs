@@ -1,4 +1,8 @@
 use std::f32;
+#[cfg(feature = "testbed")]
+use std::thread;
+#[cfg(feature = "testbed")]
+use amethyst::core::nalgebra::Point3;
 
 use crate::{
     components::{CameraSelf, Grabbable, PhysicsBody},
@@ -95,7 +99,7 @@ impl GameState {
             .rotation(Vector3::new(0.9, 0.1, 0.0))
             .name(name.clone())
             .collider(&collider)
-            .build(physics_world);
+            .build(&mut physics_world.get_mut());
 
         let grabbable = {
             let loader = world.read_resource::<Loader>();
@@ -111,6 +115,10 @@ impl GameState {
                 },
             }
         };
+
+        let pw = 
+                physics_world
+                    .get();
         world
             .create_entity()
             .named(name.clone())
@@ -118,8 +126,7 @@ impl GameState {
             .with(self.cube_mesh.clone().unwrap())
             .with(grabbable.default_material.clone())
             .with(PhysicsBody(
-                physics_world
-                    .collider_world()
+                    pw.collider_world()
                     .colliders_with_name(&name)
                     .next()
                     .unwrap()
@@ -163,7 +170,7 @@ impl GameState {
         let _ = RigidBodyDesc::new()
             .name(name.clone())
             .collider(&collider)
-            .build(physics_world);
+            .build(&mut physics_world.get_mut());
 
         world
             .create_entity()
@@ -193,13 +200,15 @@ impl GameState {
             ))
             .status(BodyStatus::Kinematic)
             .collider(&collider)
-            .build(physics_world);
+            .build(&mut physics_world.get_mut());
 
+                let pw = physics_world
+                    .get();
         world
             .create_entity()
             .named(name.clone())
             .with(PhysicsBody(
-                physics_world
+                pw
                     .collider_world()
                     .colliders_with_name(&name)
                     .next()
@@ -246,16 +255,24 @@ impl SimpleState for GameState {
         for i in 0..5 {
             self.create_cube(data.world, i, &mut physics_world);
         }
-        physics_world.step();
-        physics_world.set_gravity(-Vector3::y() * 9.81);
+        physics_world.get_mut().step();
+        physics_world
+            .get_mut()
+            .set_gravity(-Vector3::y() * 9.81);
         self.create_self(data.world, &mut physics_world);
         self.create_camera(data.world);
         self.create_center(data.world);
 
-        // let mut testbed = nphysics_testbed3d::Testbed::new(physics_world.inner);
-        // testbed.look_at(Point3::new(-4.0, 1.0, -4.0), Point3::new(0.0, 1.0, 0.0));
-        // testbed.run();
-
+        #[cfg(feature = "testbed")]
+        {
+            let world_copy = physics_world.inner.clone();
+            thread::spawn(move || {
+                let mut testbed = nphysics_testbed3d::Testbed::new_with_world_owner(world_copy);
+                testbed.hide_performance_counters();
+                testbed.look_at(Point3::new(-4.0, 1.0, -4.0), Point3::new(0.0, 1.0, 0.0));
+                testbed.run();
+            });
+        }
         data.world.add_resource(physics_world);
     }
 }

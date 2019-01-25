@@ -54,7 +54,7 @@ impl<'s> System<'s> for TranslationSystem {
             mut physics_body,
         ): Self::SystemData,
     ) {
-        let world: &mut Write<MyWorld> = &mut physics_world;
+        let mut world = physics_world.get_mut();
         for (_, body) in (&cameraself, &mut physics_body).join() {
             if let Some(ref mut rb) = world
                 .collider_body_handle(body.0)

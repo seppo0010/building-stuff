@@ -3,11 +3,15 @@ name = "building-stuff"
 version = "0.1.0"
 authors = []
 
+[features]
+testbed = ["nphysics_testbed3d"]
+
 [dependencies]
 amethyst = "0.10.0"
 nphysics3d = "0.10.1"
-# nphysics_testbed3d = "0.1"
+nphysics_testbed3d = { version = "0.4.1", optional = true }
 ncollide3d = "0.18"
+nalgebra = "0.17"
 specs = "0.14.1"
 winit = "0.18.0"
 

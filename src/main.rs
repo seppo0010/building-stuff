@@ -1,7 +1,8 @@
 extern crate amethyst;
 extern crate ncollide3d;
 extern crate nphysics3d;
-// extern crate nphysics_testbed3d;
+#[cfg(feature = "testbed")]
+extern crate nphysics_testbed3d;
 extern crate specs;
 extern crate winit;
 
