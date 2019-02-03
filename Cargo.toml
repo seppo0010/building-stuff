@@ -11,3 +11,7 @@ ncollide3d = "0.17"
 nalgebra = "0.16"
 specs = "0.14.1"
 winit = "0.18.0"
+
+[patch.crates-io]
+winit = { path = '../winit' }
+amethyst = { path = '../amethyst' }

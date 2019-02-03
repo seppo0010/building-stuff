@@ -13,7 +13,11 @@ mod systems;
 
 use crate::{
     game_state::GameState,
+<<<<<<< Updated upstream
     systems::{PhysicsSystem, MoveSystem, RotationSystem, TranslationSystem},
+=======
+    systems::{MergeSystem, MovingSystem, PhysicsSystem, RotationSystem, TranslationSystem, LoadedSystem},
+>>>>>>> Stashed changes
 };
 
 use amethyst::{
@@ -61,11 +65,17 @@ fn main() -> amethyst::Result<()> {
             "move_system",
             &["rotation_system", "translation_system"],
         )
+<<<<<<< Updated upstream
         .with(
             PhysicsSystem::default(),
             "physics_system",
             &["move_system"],
         );
+=======
+        .with(MovingSystem::default(), "move_system", &["merge_system"])
+        .with(PhysicsSystem::default(), "physics_system", &["move_system"])
+        .with(LoadedSystem::default(), "loaded_system", &[]);
+>>>>>>> Stashed changes
     let mut game = Application::new("./", GameState::default(), game_data)?;
 
     game.run();

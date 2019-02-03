@@ -1,7 +1,7 @@
 use std::f32;
 
 use crate::{
-    components::{CameraSelf, Grabbable, PhysicsBody},
+    components::{CameraSelf, Grabbable, PhysicsBody, Loading},
     resources::MyWorld,
 };
 
@@ -14,7 +14,7 @@ use amethyst::{
     prelude::*,
     renderer::{
         AmbientColor, Camera, DirectionalLight, Light, Material, MaterialDefaults, MeshHandle,
-        PosNormTex, Projection, Rgba, Shape, Texture,
+        ObjFormat, PosNormTex, Projection, Rgba, Shape, Texture,Mesh,MeshData,
     },
     ui::UiCreator,
     utils::application_root_dir,
@@ -31,7 +31,7 @@ use nphysics3d::{
     object::{BodyHandle, BodyStatus, Material as PhysicsMaterial},
     volumetric::Volumetric,
 };
-const COLLIDER_MARGIN: f32 = 0.01;
+pub const COLLIDER_MARGIN: f32 = 0.01;
 const CAMERA_HEIGHT: f32 = 1.8;
 const INITIAL_CAMERA_X: f32 = 8.0;
 const INITIAL_CAMERA_Z: f32 = 4.0;
@@ -73,6 +73,34 @@ impl GameState {
                 .with(Light::Directional(s))
                 .build();
         }
+    }
+
+    fn create_fence(&mut self, world: &mut World) {
+        let (fence, material) = {
+            let mesh_storage = world.read_resource::<AssetStorage<Mesh>>();
+            let loader = world.read_resource::<Loader>();
+            let tex_storage = world.read_resource::<AssetStorage<Texture>>();
+            (
+                loader.load("fence.obj", ObjFormat, (), (), &mesh_storage),
+                Material {
+                    albedo: loader.load_from_data([0.5, 0.5, 0.5, 0.5].into(), (), &tex_storage),
+                    ..world.read_resource::<MaterialDefaults>().0.clone()
+                },
+            )
+        };
+
+        let mut t = Transform::default();
+        *t.scale_mut() = Vector3::new(0.5, 0.5, 0.5);
+        *t.translation_mut() = Vector3::new(10.0, 10.0, 10.0);
+
+        world
+            .create_entity()
+            .named("fence")
+            .with(t)
+            .with(fence)
+            .with(material)
+            .with(Loading)
+            .build();
     }
 
     fn prepare_cubes(&mut self, world: &mut World) {
@@ -240,6 +268,7 @@ impl GameState {
 }
 impl SimpleState for GameState {
     fn on_start(&mut self, data: StateData<GameData>) {
+        data.world.register::<MeshData>();
         data.world.register::<PhysicsBody>();
         data.world.register::<CameraSelf>();
         let mut physics_world = MyWorld::default();
@@ -249,8 +278,16 @@ impl SimpleState for GameState {
         for i in 0..5 {
             self.create_cube(data.world, i, &mut physics_world);
         }
+<<<<<<< Updated upstream
         physics_world.step();
         physics_world.set_gravity(-PhysicsVector3::y() * 9.81);
+=======
+        self.create_fence(data.world);
+        physics_world.get_mut().step();
+        physics_world
+            .get_mut()
+            .set_gravity(-PhysicsVector3::y() * 9.81);
+>>>>>>> Stashed changes
         self.create_self(data.world, &mut physics_world);
         self.create_camera(data.world);
         self.create_center(data.world);
