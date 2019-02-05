@@ -78,7 +78,7 @@ impl GameState {
         let mesh_storage = world.read_resource();
         let mut progress = ProgressCounter::default();
         let loader = world.read_resource::<Loader>();
-        let mesh_data = Shape::Cube.generate::<Vec<PosNormTex>>(None);
+        let mesh_data = Shape::Cube.generate::<Vec<PosNormTex>>(Some((0.5, 0.5, 0.5)));
         self.cube_mesh = Some(loader.load_from_data(mesh_data, &mut progress, &mesh_storage));
     }
 
@@ -140,7 +140,7 @@ impl GameState {
         let mut t = Transform::default();
         *t.rotation_mut() = UnitQuaternion::new(Vector3::new(0.0, 1.0, 0.0));
         *t.scale_mut() = Vector3::new(1000.0, 0.0, 1000.0);
-        *t.translation_mut() = Vector3::new(0.0, -2.0, 0.0);
+        *t.translation_mut() = Vector3::new(0.0, 0.0, 0.0);
 
         let (plane, color) = {
             let mesh_storage = world.read_resource();
