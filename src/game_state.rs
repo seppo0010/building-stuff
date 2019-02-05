@@ -88,6 +88,7 @@ impl GameState {
     fn create_cube(&mut self, world: &mut World, i: usize, physics_world: &mut MyWorld) {
         let name = format!("box{}", i);
         let collider = ColliderDesc::new(ShapeHandle::new(Cuboid::new(Vector3::repeat(0.5 - COLLIDER_MARGIN))))
+            .density(1.0)
             .name(name.clone());
 
         let _ = RigidBodyDesc::new()
