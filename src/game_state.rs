@@ -8,7 +8,7 @@ use crate::{
 use amethyst::{
     assets::{AssetStorage, Loader, ProgressCounter},
     core::{
-        nalgebra::{UnitQuaternion, Vector3},
+        nalgebra::{UnitQuaternion, Isometry3, Vector3},
         Transform,
     },
     prelude::*,
@@ -20,17 +20,19 @@ use amethyst::{
     utils::application_root_dir,
 };
 
-use na::{Isometry3, Vector3 as PhysicsVector3};
-
 use ncollide3d::{
     bounding_volume::{HasBoundingVolume, AABB},
     shape::{ConvexHull, Cuboid, Cylinder, ShapeHandle},
     transformation::ToTriMesh,
 };
 use nphysics3d::{
-    object::{BodyHandle, BodyStatus, Material as PhysicsMaterial},
+    object::{BodyHandle, BodyStatus},
     volumetric::Volumetric,
 };
+use nphysics3d::object::ColliderDesc;
+use nphysics3d::material::{MaterialHandle, BasicMaterial};
+use nphysics3d::object::RigidBodyDesc;
+
 const COLLIDER_MARGIN: f32 = 0.01;
 const CAMERA_HEIGHT: f32 = 1.8;
 const INITIAL_CAMERA_X: f32 = 8.0;
@@ -84,34 +86,20 @@ impl GameState {
     }
 
     fn create_cube(&mut self, world: &mut World, i: usize, physics_world: &mut MyWorld) {
-        let mut t = Transform::default();
-        *t.scale_mut() = Vector3::new(0.5, 0.5, 0.5);
-        *t.translation_mut() = Vector3::new(
-            (i as f32) * 3.0 - 7.5,
-            (i as f32) * 3.0 + 2.5,
-            3.0 + (-1.0_f32).powf(i as f32) * 0.5,
-        );
+        let name = format!("box{}", i);
+        let collider = ColliderDesc::new(ShapeHandle::new(Cuboid::new(Vector3::repeat(0.5 - COLLIDER_MARGIN))))
+            .name(name.clone());
 
-        let geom = ShapeHandle::new(Cuboid::new(PhysicsVector3::repeat(0.5 - COLLIDER_MARGIN)));
-        let inertia = geom.inertia(1.0);
-        let center_of_mass = geom.center_of_mass();
-
-        let pos = Isometry3::new(
-            {
-                let translation = t.translation();
-                PhysicsVector3::new(translation[0], translation[1], translation[2])
-            },
-            Vector3::new(0.9, 0.1, 0.0),
-        );
-        let handle = physics_world.add_rigid_body(pos, inertia, center_of_mass);
-
-        let body_handle = physics_world.add_collider(
-            COLLIDER_MARGIN,
-            geom.clone(),
-            handle,
-            Isometry3::identity(),
-            PhysicsMaterial::default(),
-        );
+        let _ = RigidBodyDesc::new()
+            .translation(Vector3::new(
+                (i as f32) * 3.0 - 7.5,
+                (i as f32) * 3.0 + 2.5,
+                3.0 + (-1.0_f32).powf(i as f32) * 0.5,
+            ))
+            .rotation(Vector3::new(0.9, 0.1, 0.0))
+            .name(name.clone())
+            .collider(&collider)
+            .build(physics_world);
 
         let grabbable = {
             let loader = world.read_resource::<Loader>();
@@ -129,16 +117,17 @@ impl GameState {
         };
         world
             .create_entity()
-            .named(format!("box{}", i))
-            .with(t)
+            .named(name.clone())
+            .with(Transform::default())
             .with(self.cube_mesh.clone().unwrap())
             .with(grabbable.default_material.clone())
-            .with(PhysicsBody(body_handle))
+            .with(PhysicsBody(physics_world.collider_world().colliders_with_name(&name).next().unwrap().handle()))
             .with(grabbable)
             .build();
     }
 
     fn create_floor(&mut self, world: &mut World, physics_world: &mut MyWorld) {
+    /*
         let mut t = Transform::default();
         *t.rotation_mut() = UnitQuaternion::new(Vector3::new(0.0, 1.0, 0.0));
         *t.scale_mut() = Vector3::new(1000.0, 0.0, 1000.0);
@@ -162,13 +151,13 @@ impl GameState {
             (plane, color)
         };
 
-        let geom = ShapeHandle::new(Cuboid::new(PhysicsVector3::new(1000.0, 0.0, 1000.0)));
+        let geom = ShapeHandle::new(Cuboid::new(Vector3::new(1000.0, 0.0, 1000.0)));
 
         physics_world.add_collider(
             COLLIDER_MARGIN,
             geom.clone(),
             BodyHandle::ground(),
-            Isometry3::new(PhysicsVector3::new(0.0, 0.0, 0.0), na::zero()),
+            Isometry3::new(Vector3::new(0.0, 0.0, 0.0), na::zero()),
             PhysicsMaterial::default(),
         );
 
@@ -179,9 +168,11 @@ impl GameState {
             .with(color)
             .with(t)
             .build();
+    */
     }
 
     fn create_self(&mut self, world: &mut World, physics_world: &mut MyWorld) {
+        /*
         // this is a bit strange, but ncollide has two different TriMesh that are quite similar
         let cylinder = Cylinder::new(CAMERA_HEIGHT / 2.0, 0.75);
         let aabb: AABB<f32> = cylinder.bounding_volume(&Isometry3::identity());
@@ -191,7 +182,7 @@ impl GameState {
         let center_of_mass = aabb.center();
 
         let pos = Isometry3::new(
-            PhysicsVector3::new(INITIAL_CAMERA_X, CAMERA_HEIGHT / 2.0, INITIAL_CAMERA_Z),
+            Vector3::new(INITIAL_CAMERA_X, CAMERA_HEIGHT / 2.0, INITIAL_CAMERA_Z),
             Vector3::new(0.0, 1.0, 0.0),
         );
         let handle = physics_world.add_rigid_body(pos, inertia, center_of_mass);
@@ -214,11 +205,12 @@ impl GameState {
             .with(PhysicsBody(body_handle))
             .with(CameraSelf)
             .build();
+            */
     }
     fn create_camera(&mut self, world: &mut World) {
         let mut t = Transform::default();
         *t.translation_mut() = Vector3::new(INITIAL_CAMERA_X, CAMERA_HEIGHT, INITIAL_CAMERA_Z);
-        *t.rotation_mut() = UnitQuaternion::new_observer_frame(
+        *t.rotation_mut() = UnitQuaternion::face_towards(
             &Vector3::new(1.0, 0.0, 0.0),
             &Vector3::new(0.0, 1.0, 0.0),
         );
@@ -233,8 +225,8 @@ impl GameState {
 
     fn create_center(&mut self, world: &mut World) {
         world.exec(|mut creator: UiCreator| {
-            let app_root = application_root_dir();
-            creator.create(format!("{}/resources/hud.ron", app_root), ());
+            let app_root = application_root_dir().unwrap();
+            creator.create(format!("{}/resources/hud.ron", app_root.to_str().unwrap()), ());
         });
     }
 }
@@ -250,7 +242,7 @@ impl SimpleState for GameState {
             self.create_cube(data.world, i, &mut physics_world);
         }
         physics_world.step();
-        physics_world.set_gravity(-PhysicsVector3::y() * 9.81);
+        physics_world.set_gravity(-Vector3::y() * 9.81);
         self.create_self(data.world, &mut physics_world);
         self.create_camera(data.world);
         self.create_center(data.world);

@@ -6,14 +6,12 @@ use crate::{
 };
 
 use amethyst::{
-    core::{nalgebra::Vector3, timing::Time, Transform},
+    core::{nalgebra::{Isometry3, Point3, UnitQuaternion, Vector3}, timing::Time, Transform},
     ecs::{Join, Read, ReadStorage, System, Write, WriteStorage},
     input::InputHandler,
     renderer::{Camera, Material, MouseButton},
     shrev::{EventChannel, ReaderId},
 };
-
-use na::{Isometry3, Point3, UnitQuaternion, Vector3 as PhysicsVector3};
 
 use ncollide3d::query::{Ray, RayCast};
 use nphysics3d::{
@@ -57,7 +55,7 @@ impl MoveSystem {
                     isometry.translation.vector.y,
                     isometry.translation.vector.z,
                 ),
-                PhysicsVector3::new(-r.x, -r.y, -r.z),
+                Vector3::new(-r.x, -r.y, -r.z),
             ),
             *isometry,
         )
@@ -75,7 +73,8 @@ impl MoveSystem {
             .join()
             .flat_map(|(e, b, g)| {
                 let co = physics_world
-                    .collision_world()
+                    .collider_world()
+                    .as_collider_world()
                     .collision_object(b.0)
                     .unwrap();
                 co.shape()
@@ -163,8 +162,9 @@ impl MoveSystem {
                 // this is awful
                 f.add_body_part(
                     physics_world
-                        .collider_body_handle(physics_bodies.get(entity).unwrap().0)
-                        .unwrap(),
+                        .collider(physics_bodies.get(entity).unwrap().0)
+                        .unwrap()
+                        .body_part(0),
                 );
                 (entity, physics_world.add_force_generator(f), toi, g)
             })

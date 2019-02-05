@@ -5,9 +5,13 @@ authors = []
 
 [dependencies]
 amethyst = "0.10.0"
-nphysics3d = "0.9"
+nphysics3d = "0.10.1"
 # nphysics_testbed3d = "0.1"
-ncollide3d = "0.17"
-nalgebra = "0.16"
+ncollide3d = "0.18"
 specs = "0.14.1"
 winit = "0.18.0"
+
+[patch.crates-io]
+winit = { path = "../winit" }
+nalgebra = { path = "../nalgebra" }
+amethyst = { path = "../amethyst" }

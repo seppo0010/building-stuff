@@ -1,5 +1,4 @@
 extern crate amethyst;
-extern crate nalgebra as na;
 extern crate ncollide3d;
 extern crate nphysics3d;
 // extern crate nphysics_testbed3d;
@@ -29,7 +28,8 @@ use amethyst::{
 fn main() -> amethyst::Result<()> {
     amethyst::start_logger(Default::default());
 
-    let app_root = application_root_dir();
+    let app_root_path = application_root_dir().unwrap();
+    let app_root = app_root_path.to_str().unwrap();
 
     let display_config_path = format!("{}/resources/display_config.ron", app_root);
 
