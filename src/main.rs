@@ -12,7 +12,7 @@ mod systems;
 
 use crate::{
     game_state::GameState,
-    systems::{PhysicsSystem, MoveSystem, RotationSystem, TranslationSystem},
+    systems::{MoveSystem, PhysicsSystem, RotationSystem, TranslationSystem},
 };
 
 use amethyst::{
@@ -61,11 +61,7 @@ fn main() -> amethyst::Result<()> {
             "move_system",
             &["rotation_system", "translation_system"],
         )
-        .with(
-            PhysicsSystem::default(),
-            "physics_system",
-            &["move_system"],
-        );
+        .with(PhysicsSystem::default(), "physics_system", &["move_system"]);
     let mut game = Application::new("./", GameState::default(), game_data)?;
 
     game.run();

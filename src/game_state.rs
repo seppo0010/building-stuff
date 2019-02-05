@@ -8,7 +8,7 @@ use crate::{
 use amethyst::{
     assets::{AssetStorage, Loader, ProgressCounter},
     core::{
-        nalgebra::{UnitQuaternion, Isometry3, Vector3},
+        nalgebra::{Isometry3, UnitQuaternion, Vector3},
         Transform,
     },
     prelude::*,
@@ -21,17 +21,10 @@ use amethyst::{
 };
 
 use ncollide3d::{
-    bounding_volume::{HasBoundingVolume, AABB},
     shape::{ConvexHull, Cuboid, Cylinder, ShapeHandle},
     transformation::ToTriMesh,
 };
-use nphysics3d::{
-    object::{BodyHandle, BodyStatus},
-    volumetric::Volumetric,
-};
-use nphysics3d::object::ColliderDesc;
-use nphysics3d::material::{MaterialHandle, BasicMaterial};
-use nphysics3d::object::RigidBodyDesc;
+use nphysics3d::object::{BodyStatus, ColliderDesc, RigidBodyDesc};
 
 const COLLIDER_MARGIN: f32 = 0.01;
 const CAMERA_HEIGHT: f32 = 1.8;
@@ -87,9 +80,11 @@ impl GameState {
 
     fn create_cube(&mut self, world: &mut World, i: usize, physics_world: &mut MyWorld) {
         let name = format!("box{}", i);
-        let collider = ColliderDesc::new(ShapeHandle::new(Cuboid::new(Vector3::repeat(0.5 - COLLIDER_MARGIN))))
-            .density(1.0)
-            .name(name.clone());
+        let collider = ColliderDesc::new(ShapeHandle::new(Cuboid::new(Vector3::repeat(
+            0.5 - COLLIDER_MARGIN,
+        ))))
+        .density(1.0)
+        .name(name.clone());
 
         let _ = RigidBodyDesc::new()
             .translation(Vector3::new(
@@ -122,17 +117,23 @@ impl GameState {
             .with(Transform::default())
             .with(self.cube_mesh.clone().unwrap())
             .with(grabbable.default_material.clone())
-            .with(PhysicsBody(physics_world.collider_world().colliders_with_name(&name).next().unwrap().handle()))
+            .with(PhysicsBody(
+                physics_world
+                    .collider_world()
+                    .colliders_with_name(&name)
+                    .next()
+                    .unwrap()
+                    .handle(),
+            ))
             .with(grabbable)
             .build();
     }
 
     fn create_floor(&mut self, world: &mut World, physics_world: &mut MyWorld) {
-    /*
         let mut t = Transform::default();
         *t.rotation_mut() = UnitQuaternion::new(Vector3::new(0.0, 1.0, 0.0));
         *t.scale_mut() = Vector3::new(1000.0, 0.0, 1000.0);
-        *t.translation_mut() = Vector3::new(0.0, 0.0, 0.0);
+        *t.translation_mut() = Vector3::new(0.0, -2.0, 0.0);
 
         let (plane, color) = {
             let mesh_storage = world.read_resource();
@@ -152,61 +153,61 @@ impl GameState {
             (plane, color)
         };
 
-        let geom = ShapeHandle::new(Cuboid::new(Vector3::new(1000.0, 0.0, 1000.0)));
+        let name = "floor".to_owned();
+        let collider = ColliderDesc::new(ShapeHandle::new(Cuboid::new(Vector3::new(
+            1000.0, 0.0, 1000.0,
+        ))))
+        .density(1.0)
+        .name(name.clone());
 
-        physics_world.add_collider(
-            COLLIDER_MARGIN,
-            geom.clone(),
-            BodyHandle::ground(),
-            Isometry3::new(Vector3::new(0.0, 0.0, 0.0), na::zero()),
-            PhysicsMaterial::default(),
-        );
+        let _ = RigidBodyDesc::new()
+            .name(name.clone())
+            .collider(&collider)
+            .build(physics_world);
 
         world
             .create_entity()
-            .named("floor")
+            .named(name)
             .with(plane)
             .with(color)
             .with(t)
             .build();
-    */
     }
 
     fn create_self(&mut self, world: &mut World, physics_world: &mut MyWorld) {
-        /*
-        // this is a bit strange, but ncollide has two different TriMesh that are quite similar
         let cylinder = Cylinder::new(CAMERA_HEIGHT / 2.0, 0.75);
-        let aabb: AABB<f32> = cylinder.bounding_volume(&Isometry3::identity());
         let t = cylinder.to_trimesh(10);
-        let geom = ShapeHandle::new(ConvexHull::try_from_points(&t.coords).unwrap());
-        let inertia = Cuboid::new(aabb.half_extents()).inertia(1.0);
-        let center_of_mass = aabb.center();
 
-        let pos = Isometry3::new(
-            Vector3::new(INITIAL_CAMERA_X, CAMERA_HEIGHT / 2.0, INITIAL_CAMERA_Z),
-            Vector3::new(0.0, 1.0, 0.0),
-        );
-        let handle = physics_world.add_rigid_body(pos, inertia, center_of_mass);
-        physics_world
-            .rigid_body_mut(handle)
-            .unwrap()
-            .set_status(BodyStatus::Kinematic);
+        let name = "self".to_owned();
+        let collider = ColliderDesc::new(ShapeHandle::new(
+            ConvexHull::try_from_points(&t.coords).unwrap(),
+        ))
+        .density(1.0)
+        .name(name.clone());
 
-        let body_handle = physics_world.add_collider(
-            COLLIDER_MARGIN,
-            geom.clone(),
-            handle,
-            Isometry3::identity(),
-            PhysicsMaterial::default(),
-        );
+        let _ = RigidBodyDesc::new()
+            .name(name.clone())
+            .position(Isometry3::new(
+                Vector3::new(INITIAL_CAMERA_X, CAMERA_HEIGHT / 2.0, INITIAL_CAMERA_Z),
+                Vector3::new(0.0, 1.0, 0.0),
+            ))
+            .status(BodyStatus::Kinematic)
+            .collider(&collider)
+            .build(physics_world);
 
         world
             .create_entity()
-            .named("self")
-            .with(PhysicsBody(body_handle))
+            .named(name.clone())
+            .with(PhysicsBody(
+                physics_world
+                    .collider_world()
+                    .colliders_with_name(&name)
+                    .next()
+                    .unwrap()
+                    .handle(),
+            ))
             .with(CameraSelf)
             .build();
-            */
     }
     fn create_camera(&mut self, world: &mut World) {
         let mut t = Transform::default();
@@ -227,7 +228,10 @@ impl GameState {
     fn create_center(&mut self, world: &mut World) {
         world.exec(|mut creator: UiCreator| {
             let app_root = application_root_dir().unwrap();
-            creator.create(format!("{}/resources/hud.ron", app_root.to_str().unwrap()), ());
+            creator.create(
+                format!("{}/resources/hud.ron", app_root.to_str().unwrap()),
+                (),
+            );
         });
     }
 }

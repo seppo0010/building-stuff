@@ -6,7 +6,11 @@ use crate::{
 };
 
 use amethyst::{
-    core::{nalgebra::{Isometry3, Point3, UnitQuaternion, Vector3}, timing::Time, Transform},
+    core::{
+        nalgebra::{Isometry3, Point3, UnitQuaternion, Vector3},
+        timing::Time,
+        Transform,
+    },
     ecs::{Join, Read, ReadStorage, System, Write, WriteStorage},
     input::InputHandler,
     renderer::{Camera, Material, MouseButton},
