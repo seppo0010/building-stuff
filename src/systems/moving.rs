@@ -1,13 +1,14 @@
-use std::{cmp::Ordering, f32};
+use std::f32;
 
 use crate::{
     components::{Grabbable, PhysicsBody},
     resources::MyWorld,
+    utils::find_pointed_object::find_pointed_object,
 };
 
 use amethyst::{
     core::{
-        nalgebra::{Isometry3, Point3, UnitQuaternion, Vector3},
+        nalgebra::{Isometry3, UnitQuaternion, Vector3},
         timing::Time,
         Transform,
     },
@@ -17,7 +18,6 @@ use amethyst::{
     shrev::{EventChannel, ReaderId},
 };
 
-use ncollide3d::query::{Ray, RayCast};
 use nphysics3d::{
     force_generator::{ConstantAcceleration, ForceGeneratorHandle},
     object::RigidBody,
@@ -46,53 +46,6 @@ pub struct MovingSystem {
 }
 
 impl MovingSystem {
-    fn find_current_ray(
-        &self,
-        cameras: &ReadStorage<Camera>,
-        transforms: &ReadStorage<Transform>,
-    ) -> (Ray<f32>, Isometry3<f32>) {
-        let isometry = (cameras, transforms).join().next().unwrap().1.isometry();
-        let r = isometry.rotation * Vector3::z();
-        (
-            Ray::new(
-                Point3::new(
-                    isometry.translation.vector.x,
-                    isometry.translation.vector.y,
-                    isometry.translation.vector.z,
-                ),
-                Vector3::new(-r.x, -r.y, -r.z),
-            ),
-            *isometry,
-        )
-    }
-
-    fn find_pointed_object<'a>(
-        &self,
-        ray: &Ray<f32>,
-        entities: &Entities,
-        physics_world: &Write<MyWorld>,
-        physics_bodies: &WriteStorage<PhysicsBody>,
-        grabbables: &'a ReadStorage<Grabbable>,
-    ) -> Option<(Entity, &'a Grabbable, f32)> {
-        let world = physics_world.get();
-        (entities, physics_bodies, grabbables)
-            .join()
-            .flat_map(|(e, b, g)| {
-                let co = world
-                    .collider_world()
-                    .as_collider_world()
-                    .collision_object(b.0)
-                    .unwrap();
-                co.shape()
-                    .toi_with_ray(co.position(), &ray, true)
-                    .map(|x| (e, b, x, g))
-            })
-            .min_by(|(_, _, toi1, _), (_, _, toi2, _)| {
-                toi1.partial_cmp(&toi2).unwrap_or(Ordering::Equal)
-            })
-            .map(|(e, _, toi, g)| (e, g, toi))
-    }
-
     fn get_selected_object_rigid_body<'a>(
         &self,
         physics_bodies: &WriteStorage<PhysicsBody>,
@@ -126,7 +79,7 @@ impl MovingSystem {
         time: &Read<Time>,
     ) {
         let mut world = physics_world.get_mut();
-        let camera_isometry = self.find_current_ray(cameras, transforms).1;
+        let camera_isometry = (cameras, transforms).join().next().unwrap().1.isometry();
         let rb = match self.get_selected_object_rigid_body_mut(physics_bodies, &mut world) {
             Some(x) => x,
             None => return,
@@ -143,7 +96,7 @@ impl MovingSystem {
                 .cross(&(camera_isometry.rotation * Vector3::y()));
         rb.set_linear_velocity(linear / time.delta_seconds());
         rb.set_angular_velocity(angular * MAGIC_ANGULAR_VELOCITY_MULTIPLIER);
-        so.previous_camera_position = camera_isometry;
+        so.previous_camera_position = *camera_isometry;
     }
 
     fn grab_object(
@@ -156,56 +109,62 @@ impl MovingSystem {
         grabbables: &ReadStorage<Grabbable>,
         materials: &mut WriteStorage<Material>,
     ) {
-        let (ray, camera_isometry) = self.find_current_ray(&cameras, &transforms);
+        let camera_isometry = (cameras, transforms).join().next().unwrap().1.isometry();
 
-        self.selected_object = self
-            .find_pointed_object(&ray, entities, &physics_world, physics_bodies, grabbables)
-            .filter(|(_, _, toi)| *toi < MAX_TOI_GRAB)
-            .map(|(entity, g, toi)| {
-                let mut f = ConstantAcceleration::new(
-                    -physics_world.get().gravity(),
-                    Vector3::new(0.0, 0.0, 0.0),
-                );
-                // this is awful
-                f.add_body_part(
+        self.selected_object = find_pointed_object(
+            &cameras,
+            &transforms,
+            entities,
+            &physics_world,
+            physics_bodies,
+            grabbables,
+        )
+        .filter(|(_, _, toi)| *toi < MAX_TOI_GRAB)
+        .map(|(entity, g, toi)| {
+            let mut f = ConstantAcceleration::new(
+                -physics_world.get().gravity(),
+                Vector3::new(0.0, 0.0, 0.0),
+            );
+            // this is awful
+            f.add_body_part(
+                physics_world
+                    .get()
+                    .collider(physics_bodies.get(entity).unwrap().0)
+                    .unwrap()
+                    .body_part(0),
+            );
+            (
+                entity,
+                physics_world.get_mut().add_force_generator(f),
+                toi,
+                g,
+            )
+        })
+        .map(|(entity, antig, toi, g)| {
+            let rot_inv = physics_world
+                .get()
+                .rigid_body(
                     physics_world
                         .get()
-                        .collider(physics_bodies.get(entity).unwrap().0)
-                        .unwrap()
-                        .body_part(0),
-                );
-                (
-                    entity,
-                    physics_world.get_mut().add_force_generator(f),
-                    toi,
-                    g,
+                        .collider_body_handle(physics_bodies.get(entity).unwrap().0)
+                        .unwrap(),
                 )
-            })
-            .map(|(entity, antig, toi, g)| {
-                let rot_inv = physics_world
-                    .get()
-                    .rigid_body(
-                        physics_world
-                            .get()
-                            .collider_body_handle(physics_bodies.get(entity).unwrap().0)
-                            .unwrap(),
-                    )
-                    .unwrap()
-                    .position()
-                    .rotation
-                    .inverse();
-                materials
-                    .insert(entity, g.selected_material.clone())
-                    .unwrap();
-                SelectedObject {
-                    entity,
-                    previous_camera_position: camera_isometry,
-                    force: antig,
-                    distance: toi,
-                    box_forward: rot_inv * (camera_isometry.rotation * Vector3::z()),
-                    box_up: rot_inv * (camera_isometry.rotation * Vector3::y()),
-                }
-            });
+                .unwrap()
+                .position()
+                .rotation
+                .inverse();
+            materials
+                .insert(entity, g.selected_material.clone())
+                .unwrap();
+            SelectedObject {
+                entity,
+                previous_camera_position: *camera_isometry,
+                force: antig,
+                distance: toi,
+                box_forward: rot_inv * (camera_isometry.rotation * Vector3::z()),
+                box_up: rot_inv * (camera_isometry.rotation * Vector3::y()),
+            }
+        });
     }
 
     fn drop_object(

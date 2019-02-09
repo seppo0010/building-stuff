@@ -1,11 +1,11 @@
+#[cfg(feature = "testbed")]
+use amethyst::core::nalgebra::Point3;
 use std::f32;
 #[cfg(feature = "testbed")]
 use std::thread;
-#[cfg(feature = "testbed")]
-use amethyst::core::nalgebra::Point3;
 
 use crate::{
-    components::{CameraSelf, Grabbable, PhysicsBody},
+    components::{CameraSelf, Grabbable, Mergeable, PhysicsBody},
     resources::MyWorld,
 };
 
@@ -116,17 +116,16 @@ impl GameState {
             }
         };
 
-        let pw = 
-                physics_world
-                    .get();
+        let pw = physics_world.get();
         world
             .create_entity()
             .named(name.clone())
             .with(Transform::default())
             .with(self.cube_mesh.clone().unwrap())
+            .with(Mergeable)
             .with(grabbable.default_material.clone())
             .with(PhysicsBody(
-                    pw.collider_world()
+                pw.collider_world()
                     .colliders_with_name(&name)
                     .next()
                     .unwrap()
@@ -202,14 +201,12 @@ impl GameState {
             .collider(&collider)
             .build(&mut physics_world.get_mut());
 
-                let pw = physics_world
-                    .get();
+        let pw = physics_world.get();
         world
             .create_entity()
             .named(name.clone())
             .with(PhysicsBody(
-                pw
-                    .collider_world()
+                pw.collider_world()
                     .colliders_with_name(&name)
                     .next()
                     .unwrap()
@@ -256,9 +253,7 @@ impl SimpleState for GameState {
             self.create_cube(data.world, i, &mut physics_world);
         }
         physics_world.get_mut().step();
-        physics_world
-            .get_mut()
-            .set_gravity(-Vector3::y() * 9.81);
+        physics_world.get_mut().set_gravity(-Vector3::y() * 9.81);
         self.create_self(data.world, &mut physics_world);
         self.create_camera(data.world);
         self.create_center(data.world);

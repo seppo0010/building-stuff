@@ -10,6 +10,7 @@ mod components;
 mod game_state;
 mod resources;
 mod systems;
+mod utils;
 
 use crate::{
     game_state::GameState,
