@@ -1,4 +1,4 @@
-use std::{cmp::Ordering, f32};
+use std::{cmp::Ordering, f32, ops::Deref};
 
 use crate::{components::PhysicsBody, resources::MyWorld};
 
@@ -7,21 +7,25 @@ use amethyst::{
         nalgebra::{Point3, Vector3},
         Transform,
     },
-    ecs::{Join, ReadStorage, Write, WriteStorage},
+    ecs::{Join, ReadStorage, Storage},
     renderer::Camera,
 };
 
 use ncollide3d::query::{Ray, RayCast};
-use specs::{Component, Entities, Entity};
+use specs::{storage::MaskedStorage, Component, Entities, Entity};
 
-pub fn find_pointed_object<'a, T: Component>(
+pub fn find_pointed_object<'a, T: Component, DPB, DT>(
     cameras: &ReadStorage<Camera>,
     transforms: &ReadStorage<Transform>,
     entities: &Entities,
-    physics_world: &Write<MyWorld>,
-    physics_bodies: &WriteStorage<PhysicsBody>,
-    filter_type: &'a ReadStorage<T>,
-) -> Option<(Entity, &'a T, f32)> {
+    physics_world: &MyWorld,
+    physics_bodies: &Storage<'_, PhysicsBody, DPB>,
+    filter_type: &'a Storage<'_, T, DT>,
+) -> Option<(Entity, &'a T, f32)>
+where
+    DPB: Deref<Target = MaskedStorage<PhysicsBody>>,
+    DT: Deref<Target = MaskedStorage<T>>,
+{
     let isometry = (cameras, transforms).join().next().unwrap().1.isometry();
     let ray = Ray::new(
         Point3::new(
