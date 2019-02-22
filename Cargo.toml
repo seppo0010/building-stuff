@@ -7,14 +7,9 @@ authors = []
 testbed = ["nphysics_testbed3d"]
 
 [dependencies]
-amethyst = "0.10.0"
+amethyst = { git = "https://github.com/amethyst/amethyst.git" }
 nphysics3d = "0.10.1"
 nphysics_testbed3d = { version = "0.4.1", optional = true }
 ncollide3d = "0.18"
 specs = "0.14.1"
 winit = "0.18.0"
-
-[patch.crates-io]
-winit = { path = "../winit" }
-nalgebra = { path = "../nalgebra" }
-amethyst = { path = "../amethyst" }
