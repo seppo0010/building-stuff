@@ -12,7 +12,7 @@ use crate::{
 use amethyst::{
     assets::{AssetStorage, Loader, ProgressCounter},
     core::{
-        nalgebra::{Isometry3, UnitQuaternion, Vector3},
+        nalgebra::{Isometry3, UnitQuaternion, Vector3, Translation3},
         Transform,
     },
     prelude::*,
@@ -191,14 +191,28 @@ impl GameState {
         .density(1.0)
         .name(name.clone());
 
-        let _ = RigidBodyDesc::new()
+        let collider2 = ColliderDesc::new(ShapeHandle::new(
+            ConvexHull::try_from_points(&t.coords).unwrap(),
+        ))
+        .translation(Vector3::new(0.5, 0.5, 0.5))
+        .density(1.0)
+        .name(name.clone());
+
+        let _ = nphysics3d::object::MultibodyDesc::new(nphysics3d::joint::FixedJoint::new(Isometry3::from_parts(
+Translation3::new(0.0, 0.0, 3.0),
+UnitQuaternion::from_scaled_axis(Vector3::y() * f32::consts::PI),
+        )))
+            .mass(1.2)
             .name(name.clone())
+            /*
             .position(Isometry3::new(
                 Vector3::new(INITIAL_CAMERA_X, CAMERA_HEIGHT / 2.0, INITIAL_CAMERA_Z),
                 Vector3::new(0.0, 1.0, 0.0),
             ))
             .status(BodyStatus::Kinematic)
+            */
             .collider(&collider)
+            .collider(&collider2)
             .build(&mut physics_world.get_mut());
 
         let pw = physics_world.get();

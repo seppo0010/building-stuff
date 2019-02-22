@@ -37,6 +37,7 @@ impl<'s> System<'s> for MergeSystem {
         &mut self,
         (entities, mut physics_world, mut physics_bodies, input, cameras, transforms, mergeable): Self::SystemData,
     ) {
+        /*
         let w = physics_world.get();
         if input.key_is_down(VirtualKeyCode::E) {
             let x =
@@ -74,5 +75,6 @@ impl<'s> System<'s> for MergeSystem {
             println!("{:?}", x)
         } else {
         }
+    */
     }
 }

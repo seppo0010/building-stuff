@@ -20,6 +20,7 @@ impl<'s> System<'s> for PhysicsSystem {
         Read<'s, Time>,
     );
     fn run(&mut self, (mut physics_world, mut transforms, bodies, time): Self::SystemData) {
+        /*
         let mut world = physics_world.get_mut();
         self.time_accumulator += time.delta_seconds();
         let timestep = world.timestep();
@@ -40,5 +41,6 @@ impl<'s> System<'s> for PhysicsSystem {
                 *t.rotation_mut() = pos.rotation;
             }
         }
+        */
     }
 }
