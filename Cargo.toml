@@ -4,10 +4,10 @@ version = "0.1.0"
 authors = []
 
 [dependencies]
-amethyst = "0.10.0"
-nphysics3d = "0.9"
+amethyst = { version = "0.14.0", features = [ "vulkan" ] }
+nphysics3d = "0.13.1"
 # nphysics_testbed3d = "0.1"
-ncollide3d = "0.17"
-nalgebra = "0.16"
-specs = "0.14.1"
-winit = "0.18.0"
+ncollide3d = "0.21"
+nalgebra = "0.19"
+specs = "0.16.1"
+winit = "0.21.0"
