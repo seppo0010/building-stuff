@@ -6,22 +6,22 @@ use crate::{
 };
 
 use amethyst::{
-    core::{nalgebra::Vector3, timing::Time, Transform},
+    core::{timing::Time, Transform},
     ecs::{Join, Read, ReadStorage, System, Write, WriteStorage},
     input::InputHandler,
-    renderer::{Camera, Material, MouseButton},
+    renderer::{Camera, Material},
     shrev::{EventChannel, ReaderId},
 };
 
-use na::{Isometry3, Point3, UnitQuaternion, Vector3 as PhysicsVector3};
+use na::{Isometry3, Point3, UnitQuaternion, Vector3};
 
 use ncollide3d::query::{Ray, RayCast};
 use nphysics3d::{
-    force_generator::{ConstantAcceleration, ForceGeneratorHandle},
+    force_generator::{ConstantAcceleration, DefaultForceGeneratorHandle},
     object::RigidBody,
 };
-use specs::{prelude::Resources, Entities, Entity};
-use winit::{DeviceEvent, Event};
+use specs::{world::World, Entities, Entity};
+use winit::event::{DeviceEvent, Event, MouseButton};
 
 const MAGIC_ANGULAR_VELOCITY_MULTIPLIER: f32 = 50.0;
 const MAX_TOI_GRAB: f32 = 4.0;
@@ -29,7 +29,7 @@ const MAX_TOI_GRAB: f32 = 4.0;
 struct SelectedObject {
     entity: Entity,
     previous_camera_position: Isometry3<f32>,
-    force: ForceGeneratorHandle,
+    force: DefaultForceGeneratorHandle,
     distance: f32,
     box_forward: Vector3<f32>,
     box_up: Vector3<f32>,
@@ -57,7 +57,7 @@ impl MoveSystem {
                     isometry.translation.vector.y,
                     isometry.translation.vector.z,
                 ),
-                PhysicsVector3::new(-r.x, -r.y, -r.z),
+                Vector3::new(-r.x, -r.y, -r.z),
             ),
             *isometry,
         )
@@ -330,10 +330,10 @@ impl<'s> System<'s> for MoveSystem {
         }
     }
 
-    fn setup(&mut self, res: &mut Resources) {
-        use amethyst::core::specs::prelude::SystemData;
+    fn setup(&mut self, world: &mut World) {
+        use specs::prelude::SystemData;
 
-        Self::SystemData::setup(res);
+        Self::SystemData::setup(world);
         self.event_reader = Some(res.fetch_mut::<EventChannel<Event>>().register_reader());
     }
 }

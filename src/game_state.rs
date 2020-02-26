@@ -7,20 +7,18 @@ use crate::{
 
 use amethyst::{
     assets::{AssetStorage, Loader, ProgressCounter},
-    core::{
-        nalgebra::{UnitQuaternion, Vector3},
-        Transform,
-    },
+    core::Transform,
     prelude::*,
     renderer::{
-        AmbientColor, Camera, DirectionalLight, Light, Material, MaterialDefaults, MeshHandle,
-        PosNormTex, Projection, Rgba, Shape, Texture,
+        camera::Projection, light::DirectionalLight, light::Light, rendy::texture::pixel::Rgba,
+        rendy::texture::Texture, rendy::util::types::vertex::PosNormTex, resources::AmbientColor,
+        shape::Shape, Camera, Material, MaterialDefaults,
     },
     ui::UiCreator,
     utils::application_root_dir,
 };
 
-use na::{Isometry3, Vector3 as PhysicsVector3};
+use na::{Isometry3, UnitQuaternion, Vector3 as PhysicsVector3, Vector3};
 
 use ncollide3d::{
     bounding_volume::{HasBoundingVolume, AABB},
@@ -28,7 +26,8 @@ use ncollide3d::{
     transformation::ToTriMesh,
 };
 use nphysics3d::{
-    object::{BodyHandle, BodyStatus, Material as PhysicsMaterial},
+    material::Material as PhysicsMaterial,
+    object::{BodyHandle, BodyStatus},
     volumetric::Volumetric,
 };
 const COLLIDER_MARGIN: f32 = 0.01;
@@ -150,7 +149,7 @@ impl GameState {
             let mut progress = ProgressCounter::default();
             let loader = world.read_resource::<Loader>();
             let mesh_data = Shape::Cube.generate::<Vec<PosNormTex>>(None);
-            let plane: MeshHandle = loader.load_from_data(mesh_data, &mut progress, &mesh_storage);
+            let plane = loader.load_from_data(mesh_data, &mut progress, &mesh_storage);
             let color = Material {
                 albedo: loader.load_from_data(
                     [135.0 / 255.0, 67.0 / 255.0, 23.0 / 255.0, 1.0].into(),

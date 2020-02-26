@@ -13,7 +13,7 @@ mod systems;
 
 use crate::{
     game_state::GameState,
-    systems::{PhysicsSystem, MoveSystem, RotationSystem, TranslationSystem},
+    systems::{MoveSystem, PhysicsSystem, RotationSystem, TranslationSystem},
 };
 
 use amethyst::{
@@ -21,9 +21,17 @@ use amethyst::{
     core::transform::TransformBundle,
     input::InputBundle,
     prelude::*,
-    renderer::{DisplayConfig, DrawShaded, Pipeline, PosNormTex, RenderBundle, Stage},
+    renderer::{
+        pass::DrawShaded,
+        plugins::RenderShaded3D,
+        rendy::{
+            graph::render::Pipeline, hal::pso::PipelineStage, util::types::vertex::PosNormTex,
+        },
+        RenderToWindow, RenderingBundle,
+    },
     ui::{DrawUi, UiBundle},
     utils::application_root_dir,
+    window::DisplayConfig,
 };
 
 fn main() -> amethyst::Result<()> {
@@ -35,13 +43,6 @@ fn main() -> amethyst::Result<()> {
 
     let key_bindings_path = format!("{}/resources/input.ron", app_root);
 
-    let pipe = Pipeline::build().with_stage(
-        Stage::with_backbuffer()
-            .clear_target([30.0 / 255.0, 144.0 / 255.0, 1.0, 1.0], 1.0)
-            .with_pass(DrawShaded::<PosNormTex>::new())
-            .with_pass(DrawUi::new()),
-    );
-
     let game_data = GameDataBuilder::default()
         .with_bundle(
             InputBundle::<String, String>::new().with_bindings_from_file(&key_bindings_path)?,
@@ -51,8 +52,15 @@ fn main() -> amethyst::Result<()> {
         .with_bundle(TransformBundle::new().with_dep(&[]))?
         .with_bundle(UiBundle::<String, String>::new())?
         .with_bundle(
-            RenderBundle::new(pipe, Some(DisplayConfig::load(&display_config_path)))
-                .with_sprite_sheet_processor(),
+                        RenderingBundle::<DefaultBackend>::new()
+                .with_plugin(
+                    RenderToWindow::from_config_path(display_config_path)?
+                        .with_clear([0.34, 0.36, 0.52, 1.0]),
+                )
+                .with_plugin(RenderShaded3D::default()),
+            RenderingBundle::new().add_lugin(RenderShaded3D)
+            // Some(DisplayConfig::load(&display_config_path)))
+              //   .with_sprite_sheet_processor(),
         )?
         .with(MouseFocusUpdateSystem::new(), "mouse_focus", &[])
         .with(CursorHideSystem::new(), "cursor_hide", &["mouse_focus"])

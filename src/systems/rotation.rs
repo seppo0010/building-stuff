@@ -2,14 +2,16 @@ use std::f32;
 
 use amethyst::{
     controls::{HideCursor, WindowFocus},
-    core::{nalgebra::Vector3, Transform},
+    core::Transform,
     ecs::{Join, Read, ReadStorage, System, WriteStorage},
     input::InputHandler,
-    renderer::{Camera, MouseButton},
+    renderer::Camera,
     shrev::{EventChannel, ReaderId},
 };
-use specs::prelude::Resources;
-use winit::{DeviceEvent, Event};
+use na::Vector3;
+use specs::world::World;
+use winit::event::{DeviceEvent, Event, MouseButton};
+
 pub struct RotationSystem {
     sensitivity_x: f32,
     sensitivity_y: f32,
@@ -65,10 +67,10 @@ impl<'s> System<'s> for RotationSystem {
         }
     }
 
-    fn setup(&mut self, res: &mut Resources) {
-        use amethyst::core::specs::prelude::SystemData;
+    fn setup(&mut self, world: &mut World) {
+        use specs::prelude::SystemData;
 
-        Self::SystemData::setup(res);
+        Self::SystemData::setup(world);
         self.event_reader = Some(res.fetch_mut::<EventChannel<Event>>().register_reader());
     }
 }

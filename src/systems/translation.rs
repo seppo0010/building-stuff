@@ -6,14 +6,13 @@ use crate::{
 };
 use amethyst::{
     controls::{HideCursor, WindowFocus},
-    core::{
-        nalgebra::{Unit, Vector3},
-        Transform,
-    },
+    core::Transform,
     ecs::{Join, Read, ReadStorage, System, Write, WriteStorage},
     input::{get_input_axis_simple, InputHandler},
     renderer::Camera,
 };
+use na::{Unit, Vector3};
+
 pub struct TranslationSystem {
     speed: f32,
     speed_running: f32,
@@ -81,11 +80,12 @@ impl<'s> System<'s> for TranslationSystem {
                                 .collider_body_handle(body.0)
                                 .and_then(|bh| world.rigid_body_mut(bh))
                             {
-                                let speed = if input.key_is_down(winit::VirtualKeyCode::LShift) {
-                                    self.speed_running
-                                } else {
-                                    self.speed
-                                };
+                                let speed =
+                                    if input.key_is_down(winit::event::VirtualKeyCode::LShift) {
+                                        self.speed_running
+                                    } else {
+                                        self.speed
+                                    };
                                 rb.set_linear_velocity(linear * speed);
                                 let pos = rb.position().translation.vector;
                                 iso.translation.vector = Vector3::new(pos.x, h, pos.z);
